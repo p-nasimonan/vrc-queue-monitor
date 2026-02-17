@@ -42,6 +42,11 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
       # 収集設定
       POLL_INTERVAL_MINUTES: ${POLL_INTERVAL_MINUTES:-2}
+      # スケジュール設定
+      SCHEDULE_TYPE: ${SCHEDULE_TYPE:-always}
+      SCHEDULE_DAYS: ${SCHEDULE_DAYS:-}
+      SCHEDULE_START_TIME: ${SCHEDULE_START_TIME:-00:00}
+      SCHEDULE_END_TIME: ${SCHEDULE_END_TIME:-23:59}
     restart: unless-stopped
     volumes:
       # 開発用: ホットリロード

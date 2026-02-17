@@ -8,6 +8,7 @@ import schedule
 
 from vrc_api import VRChatAPI
 from db import Database
+from scheduler import ScheduleConfig
 
 # ログ設定
 logging.basicConfig(
@@ -18,8 +19,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def collect_metrics(api: VRChatAPI, db: Database, group_id: str):
+def collect_metrics(api: VRChatAPI, db: Database, group_id: str, schedule_config: ScheduleConfig):
     """メトリクスを収集してDBに保存"""
+
+    # スケジュール確認
+    if not schedule_config.is_active_now():
+        logger.debug("Outside of scheduled monitoring period, skipping collection")
+        return
+
     logger.info(f"Starting metrics collection for group: {group_id}")
 
     try:
@@ -27,7 +34,7 @@ def collect_metrics(api: VRChatAPI, db: Database, group_id: str):
         instances = api.get_instances_with_queue(group_id)
 
         if not instances:
-            logger.warning("No instances found or API error")
+            logger.info("No active instances found")
             return
 
         # DBに保存
@@ -48,10 +55,14 @@ def main():
 
     poll_interval = int(os.environ.get("POLL_INTERVAL_MINUTES", 2))
 
+    # スケジュール設定
+    schedule_config = ScheduleConfig()
+
     logger.info("=" * 50)
     logger.info("VRC Queue Monitor - Starting")
     logger.info(f"Group ID: {group_id}")
     logger.info(f"Poll Interval: {poll_interval} minutes")
+    logger.info(f"Schedule: {schedule_config.get_status_message()}")
     logger.info("=" * 50)
 
     # 初期化
@@ -68,13 +79,16 @@ def main():
         logger.error("Failed to authenticate with VRChat API")
         sys.exit(1)
 
-    # 初回実行
-    logger.info("Running initial collection...")
-    collect_metrics(api, db, group_id)
+    # 初回実行（スケジュール範囲内なら）
+    if schedule_config.is_active_now():
+        logger.info("Running initial collection...")
+        collect_metrics(api, db, group_id, schedule_config)
+    else:
+        logger.info("Outside of scheduled period, waiting for next active window...")
 
     # スケジュール設定
     schedule.every(poll_interval).minutes.do(
-        collect_metrics, api=api, db=db, group_id=group_id
+        collect_metrics, api=api, db=db, group_id=group_id, schedule_config=schedule_config
     )
 
     logger.info(f"Scheduled to run every {poll_interval} minutes")
@@ -87,6 +101,7 @@ def main():
     except KeyboardInterrupt:
         logger.info("Shutting down...")
     finally:
+        api.close()
         db.close()
         logger.info("Goodbye!")
 

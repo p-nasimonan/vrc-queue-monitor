@@ -1,26 +1,27 @@
-"""VRChat API操作クラス"""
+"""VRChat API操作クラス (vrchatapi SDK使用)"""
 
 import os
 import time
 import logging
 from typing import Optional
-import requests
+
+import vrchatapi
+from vrchatapi.api import authentication_api, groups_api, instances_api
+from vrchatapi.exceptions import UnauthorizedException, ApiException
+from vrchatapi.models.two_factor_auth_code import TwoFactorAuthCode
 import pyotp
 
 logger = logging.getLogger(__name__)
 
 
 class VRChatAPI:
-    """VRChat APIクライアント"""
-
-    BASE_URL = "https://api.vrchat.cloud/api/1"
-    USER_AGENT = "vrc-queue-monitor/1.0"
+    """VRChat APIクライアント (SDK版)"""
 
     def __init__(self):
-        self.session = requests.Session()
-        self.session.headers.update({
-            "User-Agent": self.USER_AGENT,
-        })
+        self.api_client: Optional[vrchatapi.ApiClient] = None
+        self.auth_api: Optional[authentication_api.AuthenticationApi] = None
+        self.groups_api: Optional[groups_api.GroupsApi] = None
+        self.instances_api: Optional[instances_api.InstancesApi] = None
         self._authenticated = False
 
     def login(self) -> bool:
@@ -34,60 +35,66 @@ class VRChatAPI:
             return False
 
         try:
-            # 基本認証でログイン
-            response = self.session.get(
-                f"{self.BASE_URL}/auth/user",
-                auth=(username, password)
+            # Configuration作成
+            configuration = vrchatapi.Configuration(
+                username=username,
+                password=password,
             )
 
-            if response.status_code == 200:
-                data = response.json()
-                # 2FA必要かチェック
-                if "requiresTwoFactorAuth" in data:
-                    if not totp_secret:
-                        logger.error("2FA required but TOTP_SECRET not set")
+            # APIクライアント作成
+            self.api_client = vrchatapi.ApiClient(configuration)
+            self.api_client.user_agent = "vrc-queue-monitor/1.0 (https://github.com/your-repo)"
+
+            # API インスタンス作成
+            self.auth_api = authentication_api.AuthenticationApi(self.api_client)
+            self.groups_api = groups_api.GroupsApi(self.api_client)
+            self.instances_api = instances_api.InstancesApi(self.api_client)
+
+            try:
+                # ログイン試行
+                current_user = self.auth_api.get_current_user()
+            except UnauthorizedException as e:
+                if e.status == 200:
+                    # 2FA必要
+                    if "2 Factor Authentication" in str(e.reason):
+                        if not totp_secret:
+                            logger.error("2FA required but TOTP_SECRET not set")
+                            return False
+
+                        try:
+                            totp = pyotp.TOTP(totp_secret)
+                            code = totp.now()
+                            self.auth_api.verify2_fa(
+                                two_factor_auth_code=TwoFactorAuthCode(code)
+                            )
+                            current_user = self.auth_api.get_current_user()
+                        except Exception as e2:
+                            logger.error(f"2FA verification failed: {e2}")
+                            return False
+                    else:
+                        logger.error(f"Authentication failed: {e.reason}")
                         return False
+                else:
+                    logger.error(f"Login failed: {e}")
+                    return False
 
-                    # TOTPコード生成して送信
-                    totp = pyotp.TOTP(totp_secret)
-                    code = totp.now()
+            self._authenticated = True
+            logger.info(f"Logged in as: {current_user.display_name}")
+            return True
 
-                    # 2FA認証（TOTP）
-                    verify_response = self.session.post(
-                        f"{self.BASE_URL}/auth/twofactorauth/totp/verify",
-                        json={"code": code}
-                    )
-
-                    if verify_response.status_code != 200:
-                        logger.error(f"2FA verification failed: {verify_response.text}")
-                        return False
-
-                    # 2FA後に再度ユーザー情報取得
-                    response = self.session.get(f"{self.BASE_URL}/auth/user")
-                    if response.status_code != 200:
-                        logger.error(f"Post-2FA auth failed: {response.text}")
-                        return False
-
-                self._authenticated = True
-                logger.info(f"Logged in as: {response.json().get('displayName', 'Unknown')}")
-                return True
-
-            logger.error(f"Login failed: {response.status_code} - {response.text}")
+        except ApiException as e:
+            logger.error(f"API Exception during login: {e}")
             return False
-
         except Exception as e:
             logger.error(f"Login error: {e}")
             return False
 
     def ensure_authenticated(self) -> bool:
         """認証済みか確認し、必要ならログインする"""
-        if self._authenticated:
-            # セッション有効性確認
+        if self._authenticated and self.auth_api:
             try:
-                response = self.session.get(f"{self.BASE_URL}/auth/user")
-                if response.status_code == 200:
-                    return True
-                self._authenticated = False
+                self.auth_api.get_current_user()
+                return True
             except Exception:
                 self._authenticated = False
 
@@ -99,34 +106,29 @@ class VRChatAPI:
             return []
 
         try:
-            response = self.session.get(f"{self.BASE_URL}/groups/{group_id}/instances")
+            instances = self.groups_api.get_group_instances(group_id)
+            logger.info(f"Found {len(instances)} active instances")
+            return [inst.to_dict() for inst in instances]
 
-            if response.status_code == 200:
-                instances = response.json()
-                logger.info(f"Found {len(instances)} active instances")
-                return instances
-
-            logger.error(f"Failed to get group instances: {response.status_code}")
+        except ApiException as e:
+            logger.error(f"Failed to get group instances: {e}")
             return []
-
         except Exception as e:
             logger.error(f"Error getting group instances: {e}")
             return []
 
-    def get_instance_detail(self, location: str) -> Optional[dict]:
+    def get_instance_detail(self, world_id: str, instance_id: str) -> Optional[dict]:
         """インスタンスの詳細情報（queueSize含む）を取得"""
         if not self.ensure_authenticated():
             return None
 
         try:
-            response = self.session.get(f"{self.BASE_URL}/instances/{location}")
+            instance = self.instances_api.get_instance(world_id, instance_id)
+            return instance.to_dict()
 
-            if response.status_code == 200:
-                return response.json()
-
-            logger.warning(f"Failed to get instance detail for {location}: {response.status_code}")
+        except ApiException as e:
+            logger.warning(f"Failed to get instance detail: {e}")
             return None
-
         except Exception as e:
             logger.error(f"Error getting instance detail: {e}")
             return None
@@ -148,11 +150,19 @@ class VRChatAPI:
 
         results = []
         for i, instance in enumerate(instances):
-            location = instance.get("location") or instance.get("instanceId")
+            # locationからworld_idとinstance_idを分離
+            location = instance.get("location") or instance.get("instance_id")
             if not location:
                 continue
 
-            detail = self.get_instance_detail(location)
+            # location形式: wrld_xxx:12345~region(xx)
+            if ":" in location:
+                world_id, instance_id = location.split(":", 1)
+            else:
+                logger.warning(f"Invalid location format: {location}")
+                continue
+
+            detail = self.get_instance_detail(world_id, instance_id)
             if detail:
                 results.append(detail)
 
@@ -162,3 +172,9 @@ class VRChatAPI:
 
         logger.info(f"Retrieved details for {len(results)} instances")
         return results
+
+    def close(self):
+        """APIクライアントをクローズ"""
+        if self.api_client:
+            self.api_client.close()
+            self._authenticated = False
