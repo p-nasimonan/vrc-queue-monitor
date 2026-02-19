@@ -1,0 +1,14 @@
+@layer reset, base, tokens, recipes, utilities;
+
+html {
+  font-family: 'Noto Sans JP', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  min-height: 100vh;
+  background-color: var(--colors-bg);
+  color: var(--colors-text);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}

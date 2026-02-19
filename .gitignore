@@ -1,5 +1,12 @@
 # 環境変数（認証情報含む）
 .env
+.env.local
+
+# pnpm
+pnpm-lock.yaml
+
+# Panda CSS (generated)
+styled-system/
 
 # Python
 __pycache__/

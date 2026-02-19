@@ -1,0 +1,21 @@
+{
+  "name": "vrc-queue-monitor",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "pnpm --filter vrc-queue-monitor-frontend dev",
+    "dev:mock": "NEXT_PUBLIC_USE_MOCK_API=true pnpm --filter vrc-queue-monitor-frontend dev",
+    "build": "pnpm --filter vrc-queue-monitor-frontend build",
+    "start": "pnpm --filter vrc-queue-monitor-frontend start",
+    "lint": "pnpm --filter vrc-queue-monitor-frontend lint",
+    "db:up": "docker compose up postgres -d",
+    "db:down": "docker compose down postgres",
+    "api:up": "docker compose up api -d",
+    "api:down": "docker compose down api",
+    "api:dev": "cd apps/backend && python src/api.py",
+    "collector:up": "docker compose up collector -d",
+    "collector:down": "docker compose down collector",
+    "all:up": "docker compose up -d"
+  }
+}
