@@ -1,3 +1,6 @@
+# Production Docker Compose
+# 使用法: docker compose -f docker-compose.prod.yml up -d
+
 services:
   # PostgreSQL Database
   postgres:
@@ -6,23 +9,25 @@ services:
     environment:
       POSTGRES_DB: ${DB_NAME:-vrc_monitor}
       POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./apps/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    ports:
-      - "${DB_EXTERNAL_PORT:-5433}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-vrc_monitor}"]
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+    # 本番ではポート公開しない（内部通信のみ）
+    # ports:
+    #   - "5432:5432"
 
   # Backend Collector (VRChat APIからデータ収集)
   collector:
     build:
       context: ./apps/backend
-      target: ${BUILD_TARGET:-development}
+      target: production
     container_name: vrc-monitor-collector
     depends_on:
       postgres:
@@ -36,22 +41,20 @@ services:
       DB_PORT: 5432
       DB_NAME: ${DB_NAME:-vrc_monitor}
       DB_USER: ${DB_USER:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD:-postgres}
-      POLL_INTERVAL_MINUTES: ${POLL_INTERVAL_MINUTES:-2}
-      SCHEDULE_TYPE: ${SCHEDULE_TYPE:-always}
+      DB_PASSWORD: ${DB_PASSWORD}
+      POLL_INTERVAL_MINUTES: ${POLL_INTERVAL_MINUTES:-5}
+      SCHEDULE_TYPE: ${SCHEDULE_TYPE:-time}
       SCHEDULE_DAYS: ${SCHEDULE_DAYS:-}
-      SCHEDULE_START_TIME: ${SCHEDULE_START_TIME:-00:00}
-      SCHEDULE_END_TIME: ${SCHEDULE_END_TIME:-23:59}
+      SCHEDULE_START_TIME: ${SCHEDULE_START_TIME:-21:00}
+      SCHEDULE_END_TIME: ${SCHEDULE_END_TIME:-02:00}
     restart: unless-stopped
-    volumes:
-      - ./apps/backend/src:/app:ro
-    command: python -u /app/main.py
+    # 本番ではボリュームマウントなし（イメージ内のコードを使用）
 
   # Backend API Server (FastAPI)
   api:
     build:
       context: ./apps/backend
-      target: ${BUILD_TARGET:-development}
+      target: production
     container_name: vrc-monitor-api
     depends_on:
       postgres:
@@ -61,29 +64,28 @@ services:
       DB_PORT: 5432
       DB_NAME: ${DB_NAME:-vrc_monitor}
       DB_USER: ${DB_USER:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD:-postgres}
-      SCHEDULE_START_TIME: ${SCHEDULE_START_TIME:-00:00}
-      SCHEDULE_END_TIME: ${SCHEDULE_END_TIME:-23:59}
+      DB_PASSWORD: ${DB_PASSWORD}
+      SCHEDULE_START_TIME: ${SCHEDULE_START_TIME:-21:00}
+      SCHEDULE_END_TIME: ${SCHEDULE_END_TIME:-02:00}
       API_PORT: 8000
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
-      ENV: ${ENV:-production}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://your-domain.com}
+      ENV: production
     ports:
       - "${API_PORT:-8000}:8000"
     restart: unless-stopped
-    volumes:
-      - ./apps/backend/src:/app:ro
-    command: python -u /app/api.py
+    command: ["python", "api.py"]
 
   # Frontend Viewer (Next.js)
   frontend:
     build:
       context: ./apps/frontend
+      target: runner
     container_name: vrc-monitor-frontend
     depends_on:
       api:
         condition: service_started
     environment:
-      NEXT_PUBLIC_API_URL: http://api:8000
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://api:8000}
       NEXT_PUBLIC_USE_MOCK_API: "false"
       NEXT_PUBLIC_SITE_NAME: ${NEXT_PUBLIC_SITE_NAME:-VRC Queue Monitor}
       NEXT_PUBLIC_REFRESH_INTERVAL: ${NEXT_PUBLIC_REFRESH_INTERVAL:-60000}

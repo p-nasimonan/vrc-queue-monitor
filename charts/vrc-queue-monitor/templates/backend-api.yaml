@@ -1,0 +1,67 @@
+{{- if .Values.backendApi.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-backend-api
+  labels:
+    {{- include "vrc-queue-monitor.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend-api
+spec:
+  replicas: {{ .Values.backendApi.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "vrc-queue-monitor.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend-api
+  template:
+    metadata:
+      labels:
+        {{- include "vrc-queue-monitor.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: backend-api
+    spec:
+      containers:
+        - name: backend-api
+          image: {{ include "vrc-queue-monitor.image" (dict "root" . "name" .Values.backendApi.image.name) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: {{ toJson .Values.backendApi.command }}
+          ports:
+            - containerPort: {{ .Values.backendApi.service.port }}
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-backend-api-config
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "vrc-queue-monitor.secretName" . }}
+                  key: DB_PASSWORD
+          resources:
+            {{- toYaml .Values.backendApi.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.backendApi.service.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: {{ .Values.backendApi.service.port }}
+            initialDelaySeconds: 15
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-backend-api
+  labels:
+    {{- include "vrc-queue-monitor.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend-api
+spec:
+  type: {{ .Values.backendApi.service.type }}
+  selector:
+    {{- include "vrc-queue-monitor.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: backend-api
+  ports:
+    - port: {{ .Values.backendApi.service.port }}
+      targetPort: {{ .Values.backendApi.service.port }}
+{{- end }}

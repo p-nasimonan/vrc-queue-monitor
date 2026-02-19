@@ -1,0 +1,149 @@
+## ── イメージ設定 ─────────────────────────────────────
+image:
+  registry: ghcr.io
+  repository: p-nasimonan/vrc-queue-monitor
+  pullPolicy: IfNotPresent
+  tag: ""  # 空のときは Chart.yaml の appVersion を使用
+
+## ── フロントエンド ────────────────────────────────────
+frontend:
+  enabled: true
+  replicaCount: 1
+  image:
+    name: frontend  # registry/repository/name:tag
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  service:
+    type: ClusterIP
+    port: 3000
+  ## フロントエンドの環境変数（ConfigMap に書き出される）
+  config:
+    NEXT_PUBLIC_SITE_NAME: "VRC Queue Monitor"
+    NEXT_PUBLIC_REFRESH_INTERVAL: "60000"
+    NEXT_PUBLIC_DISPLAY_DAYS: "30"
+    NEXT_PUBLIC_DEFAULT_THEME: "light"
+    NEXT_PUBLIC_USE_MOCK_API: "false"
+    ## API URL は自動設定される（backendApi.service.name:port）
+    ## 上書きしたい場合は以下をコメントアウト
+    # NEXT_PUBLIC_API_URL: "https://api.example.com"
+
+## ── バックエンド API ──────────────────────────────────
+backendApi:
+  enabled: true
+  replicaCount: 1
+  image:
+    name: backend
+  command: ["python", "api.py"]
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  service:
+    type: ClusterIP
+    port: 8000
+  config:
+    API_PORT: "8000"
+    ENV: "production"
+    SCHEDULE_START_TIME: "21:00"
+    SCHEDULE_END_TIME: "02:00"
+
+## ── バックエンド コレクター ───────────────────────────
+backendCollector:
+  enabled: true
+  image:
+    name: backend
+  command: ["python", "main.py"]
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  config:
+    POLL_INTERVAL_MINUTES: "5"
+    SCHEDULE_TYPE: "time"
+    SCHEDULE_START_TIME: "21:00"
+    SCHEDULE_END_TIME: "02:00"
+
+## ── PostgreSQL ────────────────────────────────────────
+postgres:
+  enabled: true
+  image: postgres:15-alpine
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  service:
+    port: 5432
+  persistence:
+    enabled: true
+    storageClass: ""
+    size: 5Gi
+  config:
+    DB_NAME: vrc_monitor
+    DB_USER: postgres
+
+## ── シークレット（VRChat 認証情報・DB パスワード） ────
+## 本番では SealedSecret または外部シークレット管理を推奨
+secrets:
+  ## 既存の k8s Secret を使う場合は existingSecret に名前を設定
+  ## SealedSecret 使用時は復号後の Secret 名を指定
+  existingSecret: ""
+
+  ## SealedSecret を使用する場合 (bitnami/sealed-secrets)
+  sealedSecret:
+    enabled: false
+    ## kubeseal で暗号化された値を設定
+    ## 暗号化例: echo -n 'value' | kubeseal --raw --scope cluster-wide
+    encryptedData:
+      dbPassword: ""
+      vrcUsername: ""
+      vrcPassword: ""
+      vrcTotpSecret: ""
+      vrcGroupId: ""
+
+  ## 直接値を設定する場合（base64 エンコード不要）
+  ## ⚠️ 本番では sealedSecret か existingSecret を使用すること
+  dbPassword: "postgres"
+  vrcUsername: ""
+  vrcPassword: ""
+  vrcTotpSecret: ""
+  vrcGroupId: ""
+
+## ── Ingress ──────────────────────────────────────────
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  hosts:
+    - host: vrc-monitor.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: frontend
+        - path: /api
+          pathType: Prefix
+          service: backend-api
+  tls: []
+  # tls:
+  #   - secretName: vrc-monitor-tls
+  #     hosts:
+  #       - vrc-monitor.example.com
+
+## ── 共通ラベル ────────────────────────────────────────
+commonLabels: {}
+
+## ── namespace ────────────────────────────────────────
+namespaceOverride: ""

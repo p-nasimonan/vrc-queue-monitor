@@ -1,0 +1,56 @@
+## フロントエンド ConfigMap
+{{- if .Values.frontend.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-frontend-config
+  labels:
+    {{- include "vrc-queue-monitor.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+data:
+  {{- with .Values.frontend.config }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+  ## バックエンドAPIのURLを自動生成（上書きされていない場合）
+  {{- if not (hasKey .Values.frontend.config "NEXT_PUBLIC_API_URL") }}
+  NEXT_PUBLIC_API_URL: "http://{{ .Release.Name }}-backend-api:{{ .Values.backendApi.service.port }}"
+  {{- end }}
+{{- end }}
+---
+## バックエンド API ConfigMap
+{{- if .Values.backendApi.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-backend-api-config
+  labels:
+    {{- include "vrc-queue-monitor.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend-api
+data:
+  {{- with .Values.backendApi.config }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+  DB_HOST: {{ .Release.Name }}-postgres
+  DB_PORT: "{{ .Values.postgres.service.port }}"
+  DB_NAME: {{ .Values.postgres.config.DB_NAME }}
+  DB_USER: {{ .Values.postgres.config.DB_USER }}
+{{- end }}
+---
+## バックエンド Collector ConfigMap
+{{- if .Values.backendCollector.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-backend-collector-config
+  labels:
+    {{- include "vrc-queue-monitor.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend-collector
+data:
+  {{- with .Values.backendCollector.config }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+  DB_HOST: {{ .Release.Name }}-postgres
+  DB_PORT: "{{ .Values.postgres.service.port }}"
+  DB_NAME: {{ .Values.postgres.config.DB_NAME }}
+  DB_USER: {{ .Values.postgres.config.DB_USER }}
+{{- end }}

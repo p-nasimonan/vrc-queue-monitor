@@ -1,0 +1,39 @@
+## PostgreSQL 初期化 SQL を ConfigMap として保持
+## postgres.yaml の initdb コンテナがマウントして実行する
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-postgres-init
+  labels:
+    {{- include "vrc-queue-monitor.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+data:
+  init.sql: |
+    -- VRC Queue Monitor - Database Schema
+
+    -- インスタンスマスタテーブル
+    CREATE TABLE IF NOT EXISTS instances (
+        id SERIAL PRIMARY KEY,
+        location TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        world_name TEXT NOT NULL,
+        capacity SMALLINT NOT NULL DEFAULT 0,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        is_active BOOLEAN NOT NULL DEFAULT TRUE
+    );
+
+    -- 時系列メトリクステーブル
+    CREATE TABLE IF NOT EXISTS metrics (
+        timestamp TIMESTAMP NOT NULL DEFAULT NOW(),
+        instance_id INTEGER NOT NULL REFERENCES instances(id) ON DELETE CASCADE,
+        queue_size SMALLINT NOT NULL DEFAULT 0,
+        current_users SMALLINT NOT NULL DEFAULT 0
+    );
+
+    -- パフォーマンス用複合インデックス
+    CREATE INDEX IF NOT EXISTS idx_metrics_instance_timestamp
+    ON metrics (instance_id, timestamp DESC);
+
+    -- タイムスタンプ単体のインデックス（時間範囲クエリ用）
+    CREATE INDEX IF NOT EXISTS idx_metrics_timestamp
+    ON metrics (timestamp DESC);

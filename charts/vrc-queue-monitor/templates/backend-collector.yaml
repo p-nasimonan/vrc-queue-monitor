@@ -1,0 +1,57 @@
+{{- if .Values.backendCollector.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-backend-collector
+  labels:
+    {{- include "vrc-queue-monitor.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend-collector
+spec:
+  replicas: 1  # コレクターは常に1レプリカ（重複収集防止）
+  selector:
+    matchLabels:
+      {{- include "vrc-queue-monitor.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend-collector
+  template:
+    metadata:
+      labels:
+        {{- include "vrc-queue-monitor.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: backend-collector
+    spec:
+      containers:
+        - name: backend-collector
+          image: {{ include "vrc-queue-monitor.image" (dict "root" . "name" .Values.backendCollector.image.name) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: {{ toJson .Values.backendCollector.command }}
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-backend-collector-config
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "vrc-queue-monitor.secretName" . }}
+                  key: DB_PASSWORD
+            - name: VRC_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "vrc-queue-monitor.secretName" . }}
+                  key: VRC_USERNAME
+            - name: VRC_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "vrc-queue-monitor.secretName" . }}
+                  key: VRC_PASSWORD
+            - name: VRC_TOTP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "vrc-queue-monitor.secretName" . }}
+                  key: VRC_TOTP_SECRET
+            - name: VRC_GROUP_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "vrc-queue-monitor.secretName" . }}
+                  key: VRC_GROUP_ID
+          resources:
+            {{- toYaml .Values.backendCollector.resources | nindent 12 }}
+{{- end }}
