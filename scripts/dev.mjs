@@ -97,7 +97,13 @@ await new Promise((resolve, reject) => {
 console.log("\x1b[36m[dev] API の起動を待機中 (3秒)...\x1b[0m");
 await new Promise((resolve) => setTimeout(resolve, 3000));
 
-// 3. Next.js frontend を起動
+// 3. API ログをストリーム表示
+run("docker", ["compose", "logs", "-f", "--no-log-prefix", "api", "collector"], {
+    label: "backend",
+    color: "cyan",
+});
+
+// 4. Next.js frontend を起動
 console.log("\x1b[32m[dev] frontend を起動中...\x1b[0m");
 run("pnpm", ["--filter", "vrc-queue-monitor-frontend", "dev"], {
     label: "frontend",

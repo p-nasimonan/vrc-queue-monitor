@@ -20,20 +20,20 @@ class ScheduleConfig:
         self.schedule_type = os.environ.get("SCHEDULE_TYPE", "always")
         self.schedule_days = self._parse_days(os.environ.get("SCHEDULE_DAYS", ""))
         self.start_time = self._parse_time(os.environ.get("SCHEDULE_START_TIME", "00:00"))
-        self.end_time = self._parse_time(os.environ.get("SCHEDULE_END_TIME", "23:59"))
+        self.duration_minutes = int(os.environ.get("SCHEDULE_DURATION_MINUTES", 1440))  # デフォルト24時間
         self.timezone = JST
 
         # イベント開始時の高頻度収集設定
         self.burst_duration_minutes = int(os.environ.get("BURST_DURATION_MINUTES", 5))
         self.burst_interval_seconds = int(os.environ.get("BURST_INTERVAL_SECONDS", 30))
 
-        # 最後にアクティブ期間が始まった時刻を記録
-        self._last_schedule_start: Optional[datetime] = None
         self._was_active = False
 
-        logger.info(f"Schedule config: type={self.schedule_type}, days={self.schedule_days}, "
-                   f"time={self.start_time}-{self.end_time}, "
-                   f"burst={self.burst_duration_minutes}min @ {self.burst_interval_seconds}s")
+        logger.info(
+            f"Schedule config: type={self.schedule_type}, days={self.schedule_days}, "
+            f"start={self.start_time}, duration={self.duration_minutes}min, "
+            f"burst={self.burst_duration_minutes}min @ {self.burst_interval_seconds}s"
+        )
 
     def _parse_days(self, days_str: str) -> list[int]:
         """
@@ -81,9 +81,7 @@ class ScheduleConfig:
         now = datetime.now(self.timezone)
         is_active = self.is_active_at(now)
 
-        # アクティブ期間の開始を検知
         if is_active and not self._was_active:
-            self._last_schedule_start = now
             logger.info(f"Schedule period started at {now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
         elif not is_active and self._was_active:
             logger.info(f"Schedule period ended at {now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
@@ -91,79 +89,53 @@ class ScheduleConfig:
         self._was_active = is_active
         return is_active
 
+    def _day_matches(self, date) -> bool:
+        """指定した date がスケジュール対象の曜日/日付かどうか"""
+        if not self.schedule_days:
+            return True
+        if self.schedule_type == "weekday":
+            return date.weekday() in self.schedule_days
+        if self.schedule_type == "day_of_month":
+            return date.day in self.schedule_days
+        return True
+
+    def _find_schedule_start(self, dt: datetime) -> Optional[datetime]:
+        """
+        dt が含まれるスケジュール期間の開始日時を返す。
+        当日・前日の start_time を候補として、dt が [start, start+duration] に
+        入っていればその start を返す。どちらにも含まれなければ None。
+        """
+        duration = timedelta(minutes=self.duration_minutes)
+        for delta_days in (0, 1):
+            candidate_date = (dt - timedelta(days=delta_days)).date()
+            start = datetime.combine(candidate_date, self.start_time).replace(tzinfo=self.timezone)
+            if start <= dt <= start + duration and self._day_matches(candidate_date):
+                return start
+        return None
+
     def is_active_at(self, dt: datetime) -> bool:
         """指定時刻が監視対象期間かどうか"""
-        # 常時監視
         if self.schedule_type == "always":
             return True
-
-        current_time = dt.time()
-        is_overnight = self.start_time > self.end_time
-
-        # 日をまたぐ場合（例: 22:00〜02:30）、深夜側（00:00〜02:30）は
-        # 「前日のスケジュール」として判定する
-        if is_overnight and current_time <= self.end_time:
-            check_dt = dt - timedelta(days=1)
-        else:
-            check_dt = dt
-
-        # 曜日ベース
-        if self.schedule_type == "weekday":
-            if self.schedule_days and check_dt.weekday() not in self.schedule_days:
-                return False
-
-        # 日付ベース (5のつく日など)
-        elif self.schedule_type == "day_of_month":
-            if self.schedule_days and check_dt.day not in self.schedule_days:
-                return False
-
-        # 時間範囲チェック
-        if is_overnight:
-            return current_time >= self.start_time or current_time <= self.end_time
-        else:
-            return self.start_time <= current_time <= self.end_time
-
-    def _get_schedule_start_datetime(self, now: datetime) -> Optional[datetime]:
-        """
-        現在のスケジュール期間における開始日時（SCHEDULE_START_TIME 基準）を返す。
-        日をまたぐ場合、深夜側（end_time 以前）にいるときは前日の start_time を返す。
-        """
-        current_time = now.time()
-        is_overnight = self.start_time > self.end_time
-
-        if is_overnight and current_time <= self.end_time:
-            # 深夜側: 前日の start_time が今の期間の開始
-            start_date = (now - timedelta(days=1)).date()
-        else:
-            start_date = now.date()
-
-        naive_start = datetime.combine(start_date, self.start_time)
-        return naive_start.replace(tzinfo=self.timezone)
+        return self._find_schedule_start(dt) is not None
 
     def is_in_burst_period(self) -> bool:
         """
-        イベント開始直後の高頻度収集期間（バースト期間）かどうか。
-
-        SCHEDULE_START_TIME の時刻を基準に経過時間を計算する。
-        サービス起動タイミングに関係なく、設定された開始時刻から
-        burst_duration_minutes 分以内であればバースト期間と判定する。
-
-        Returns:
-            True: バースト期間中
-            False: 通常期間（always モードおよびバースト期間外）
+        イベント開始直後のバースト期間かどうか。
+        SCHEDULE_START_TIME を起点に経過時間を計算するため、
+        サービスの起動タイミングに依存しない。
+        always モードではバースト期間は使用しない。
         """
-        # 常時監視モードではバースト期間を使用しない
         if self.schedule_type == "always":
             return False
 
-        if not self.is_active_now():
+        now = datetime.now(self.timezone)
+        schedule_start = self._find_schedule_start(now)
+        if schedule_start is None:
             return False
 
-        now = datetime.now(self.timezone)
-        schedule_start = self._get_schedule_start_datetime(now)
         elapsed = now - schedule_start
-
-        return timedelta(0) <= elapsed <= timedelta(minutes=self.burst_duration_minutes)
+        return elapsed <= timedelta(minutes=self.burst_duration_minutes)
 
     def get_current_poll_interval(self, normal_interval_minutes: int) -> float:
         """
@@ -184,17 +156,16 @@ class ScheduleConfig:
         if self.schedule_type == "always":
             msg = "Always monitoring"
         else:
-            days_str = ",".join(str(d) for d in self.schedule_days) if self.schedule_days else "all"
-
             if self.schedule_type == "weekday":
                 weekday_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
                 days_str = ",".join(weekday_names[d] for d in self.schedule_days) if self.schedule_days else "all"
-                msg = f"Weekdays: {days_str}, {self.start_time}-{self.end_time} JST"
+                msg = f"Weekdays: {days_str}"
             elif self.schedule_type == "day_of_month":
-                msg = f"Days: {days_str}, {self.start_time}-{self.end_time} JST"
+                days_str = ",".join(str(d) for d in self.schedule_days) if self.schedule_days else "all"
+                msg = f"Days: {days_str}"
             else:
                 msg = f"Custom: {self.schedule_type}"
+            msg += f", {self.start_time} + {self.duration_minutes}min JST"
 
-        # バースト設定を追加
         msg += f" (burst: first {self.burst_duration_minutes}min @ {self.burst_interval_seconds}s)"
         return msg

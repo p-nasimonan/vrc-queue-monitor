@@ -41,7 +41,7 @@ export interface MonitorConfig {
   schedule_type: "always" | "weekday" | "day_of_month";
   schedule_days: number[];
   start_time: string;
-  end_time: string;
+  duration_minutes: number;
   poll_interval_minutes: number;
   is_active_now: boolean;
   /** ISOString、常時監視の場合はnull */
@@ -261,7 +261,7 @@ export async function fetchConfig(): Promise<MonitorConfig> {
       schedule_type: "day_of_month",
       schedule_days: [5, 15, 25], // 5のつく日
       start_time: "22:00",
-      end_time: "23:30",
+      duration_minutes: 150,
       poll_interval_minutes: 2,
       is_active_now: false,
       next_start: tomorrow.toISOString(),

@@ -7,6 +7,18 @@ import { fetchConfig, type MonitorConfig } from "@/lib/api";
 // 曜日名（月曜=0）
 const WEEKDAY_NAMES = ["月", "火", "水", "木", "金", "土", "日"] as const;
 
+function formatTimeRange(startTime: string, durationMinutes: number): string {
+    const [startHour, startMin] = startTime.split(":").map(Number);
+    if (isNaN(startHour) || isNaN(startMin) || !durationMinutes || isNaN(durationMinutes)) {
+        return startTime;
+    }
+    const totalMins = startHour * 60 + startMin + durationMinutes;
+    const endHour = Math.floor(totalMins / 60) % 24;
+    const endMin = totalMins % 60;
+    const endStr = `${String(endHour).padStart(2, "0")}:${String(endMin).padStart(2, "0")}`;
+    return `${startTime} 〜 ${endStr}`;
+}
+
 function formatScheduleType(config: MonitorConfig): string {
     if (config.schedule_type === "always") return "常時";
     if (config.schedule_type === "weekday") {
@@ -110,7 +122,7 @@ export function ConfigPanel() {
                     })}
                 >
                     <Item label="スケジュール" value={formatScheduleType(config)} />
-                    <Item label="収集時間帯" value={`${config.start_time} 〜 ${config.end_time}`} />
+                    <Item label="収集時間帯" value={formatTimeRange(config.start_time, config.duration_minutes)} />
                     <Item label="収集間隔" value={`${config.poll_interval_minutes} 分ごと`} />
                     <Item
                         label={config.schedule_type === "always" ? "次回" : "次回収集開始"}

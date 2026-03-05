@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from db import Database
+from scheduler import ScheduleConfig
 
 # ログ設定
 logging.basicConfig(
@@ -104,22 +105,19 @@ app.add_middleware(
 def get_schedule_config():
     """スケジュール設定を取得"""
     start_time = os.getenv("SCHEDULE_START_TIME", "00:00")
-    end_time = os.getenv("SCHEDULE_END_TIME", "23:59")
-    return {"start_time": start_time, "end_time": end_time}
+    duration_minutes = int(os.getenv("SCHEDULE_DURATION_MINUTES", 1440))
+    return {"start_time": start_time, "duration_minutes": duration_minutes}
 
 
 def calculate_event_period(date: datetime) -> tuple[datetime, datetime]:
     """イベント期間を計算"""
     config = get_schedule_config()
     start_hour, start_min = map(int, config["start_time"].split(":"))
-    end_hour, end_min = map(int, config["end_time"].split(":"))
 
     start = date.replace(hour=start_hour, minute=start_min, second=0, microsecond=0)
-    end = date.replace(hour=end_hour, minute=end_min, second=59, microsecond=999999)
-
-    # 日をまたぐ場合
-    if end_hour < start_hour or (end_hour == start_hour and end_min < start_min):
-        end += timedelta(days=1)
+    end = start + timedelta(minutes=config["duration_minutes"])
+    # end の microsecond を 999999 に揃える
+    end = end.replace(microsecond=999999)
 
     return start, end
 
@@ -193,63 +191,18 @@ def _calculate_next_start() -> Optional[datetime]:
 @app.get("/api/config")
 async def get_config():
     """現在の監視設定と次回収集開始時刻を取得"""
-    from zoneinfo import ZoneInfo
-    JST = ZoneInfo("Asia/Tokyo")
-
-    schedule_type = os.getenv("SCHEDULE_TYPE", "always")
-    schedule_days_str = os.getenv("SCHEDULE_DAYS", "")
-    start_time_str = os.getenv("SCHEDULE_START_TIME", "00:00")
-    end_time_str = os.getenv("SCHEDULE_END_TIME", "23:59")
+    schedule = ScheduleConfig()
     poll_interval = int(os.getenv("POLL_INTERVAL_MINUTES", "2"))
-
-    # 曜日マッピング
-    day_map = {
-        "mon": 0, "tue": 1, "wed": 2, "thu": 3,
-        "fri": 4, "sat": 5, "sun": 6,
-        "月": 0, "火": 1, "水": 2, "木": 3, "金": 4, "土": 5, "日": 6,
-    }
-    schedule_days: list[int] = []
-    if schedule_days_str:
-        for part in schedule_days_str.lower().split(","):
-            part = part.strip()
-            if part in day_map:
-                schedule_days.append(day_map[part])
-            elif part.isdigit():
-                schedule_days.append(int(part))
-
-    # 現在アクティブかどうか
-    now = datetime.now(JST)
-    is_active = True
-    if schedule_type != "always":
-        try:
-            s_hour, s_min = map(int, start_time_str.split(":"))
-            e_hour, e_min = map(int, end_time_str.split(":"))
-            from datetime import time as dtime
-            start_t = dtime(s_hour, s_min)
-            end_t = dtime(e_hour, e_min)
-            current_t = now.time().replace(second=0, microsecond=0)
-
-            if schedule_type == "weekday" and schedule_days and now.weekday() not in schedule_days:
-                is_active = False
-            elif schedule_type == "day_of_month" and schedule_days and now.day not in schedule_days:
-                is_active = False
-            else:
-                if start_t > end_t:  # 日またぎ
-                    is_active = current_t >= start_t or current_t <= end_t
-                else:
-                    is_active = start_t <= current_t <= end_t
-        except (ValueError, IndexError):
-            pass
 
     next_start = _calculate_next_start()
 
     return {
-        "schedule_type": schedule_type,
-        "schedule_days": schedule_days,
-        "start_time": start_time_str,
-        "end_time": end_time_str,
+        "schedule_type": schedule.schedule_type,
+        "schedule_days": schedule.schedule_days,
+        "start_time": schedule.start_time.strftime("%H:%M"),
+        "duration_minutes": schedule.duration_minutes,
         "poll_interval_minutes": poll_interval,
-        "is_active_now": is_active,
+        "is_active_now": schedule.is_active_now(),
         "next_start": next_start.isoformat() if next_start else None,
     }
 
