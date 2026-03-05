@@ -1,3 +1,21 @@
 apiVersion: v1
-entries: {}
-generated: "2026-03-05T12:00:00.000Z"
+entries:
+  vrc-queue-monitor:
+  - apiVersion: v2
+    appVersion: 1.0.0
+    created: "2026-03-05T12:27:21.767152394Z"
+    description: VRChat グループインスタンスの待機列モニタリングシステム
+    digest: 3c771cb9d831321e75dc11b8e422d464e63dcc9a989b8e674b386a1053e49be8
+    keywords:
+    - vrchat
+    - monitor
+    - queue
+    maintainers:
+    - name: p-nasimonan
+      url: https://github.com/p-nasimonan
+    name: vrc-queue-monitor
+    type: application
+    urls:
+    - https://github.com/p-nasimonan/vrc-queue-monitor/releases/download/vrc-queue-monitor-0.1.2/vrc-queue-monitor-0.1.2.tgz
+    version: 0.1.2
+generated: "2026-03-05T12:27:21.767158986Z"
