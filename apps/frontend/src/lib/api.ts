@@ -2,9 +2,18 @@
  * Backend API Client
  */
 
-// クライアントは常に相対パス /api/... を使用し、
-// Next.js サーバーが BACKEND_API_URL へ rewrite してプロキシする
-// → ビルド時に API URL を埋め込む必要がなくなる
+/**
+ * サーバーサイド（RSC/SSR）は BACKEND_API_URL を直接使用。
+ * クライアントサイドは相対パス /api/... を使用し Next.js rewrite でプロキシされる。
+ */
+const getApiBase = (): string => {
+  if (typeof window === "undefined") {
+    // サーバーサイド: 環境変数からバックエンド URL を直接参照
+    return process.env.BACKEND_API_URL || "http://localhost:8000";
+  }
+  // クライアントサイド: 相対パス（Next.js rewrite がバックエンドにプロキシ）
+  return "";
+};
 
 // 型定義
 export interface Instance {
@@ -179,7 +188,7 @@ export async function fetchEventGroups(days: number = 30): Promise<EventGroup[]>
   }
 
   try {
-    const res = await fetch(`/api/event-groups?days=${days}`, {
+    const res = await fetch(`${getApiBase()}/api/event-groups?days=${days}`, {
       cache: "no-store",
     });
 
@@ -200,7 +209,7 @@ export async function fetchInstances(activeOnly: boolean = true): Promise<Instan
   }
 
   try {
-    const res = await fetch(`/api/instances?active_only=${activeOnly}`, {
+    const res = await fetch(`${getApiBase()}/api/instances?active_only=${activeOnly}`, {
       cache: "no-store",
     });
 
@@ -221,7 +230,7 @@ export async function fetchMetrics(instanceId?: number, hours: number = 24): Pro
   }
 
   try {
-    let url = `/api/metrics?hours=${hours}`;
+    let url = `${getApiBase()}/api/metrics?hours=${hours}`;
     if (instanceId) {
       url += `&instance_id=${instanceId}`;
     }
@@ -245,7 +254,7 @@ export async function checkApiHealth(): Promise<boolean> {
   }
 
   try {
-    const res = await fetch(`/api/config`, { cache: "no-store" });
+    const res = await fetch(`${getApiBase()}/api/config`, { cache: "no-store" });
     return res.ok;
   } catch {
     return false;
@@ -271,7 +280,7 @@ export async function fetchConfig(): Promise<MonitorConfig> {
   }
 
   try {
-    const res = await fetch(`/api/config`, { cache: "no-store" });
+    const res = await fetch(`${getApiBase()}/api/config`, { cache: "no-store" });
     if (!res.ok) {
       throw new Error(`API error: ${res.status}`);
     }
