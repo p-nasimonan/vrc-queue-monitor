@@ -17,26 +17,19 @@ COPY src/ ./
 ENV PYTHONUNBUFFERED=1
 CMD ["python", "main.py"]
 
-# ---- Production Builder ----
-FROM base AS builder
-COPY requirements.txt .
-# プロダクション用: 別ディレクトリにインストール
-RUN pip install --no-cache-dir --target=/install -r requirements.txt
-
 # ---- Production ----
-FROM python:3.11-alpine AS production
+FROM python:3.11-slim AS production
 
 # セキュリティ: 非rootユーザー
-RUN addgroup -g 1001 -S appgroup && \
-    adduser -u 1001 -S appuser -G appgroup
+RUN groupadd -g 1001 appgroup && \
+    useradd -u 1001 -g appgroup -m appuser
 
 WORKDIR /app
 
-# 依存関係をコピー
-COPY --from=builder /install /usr/local/lib/python3.11/site-packages/
-
-# psycopg2-binary用のlibpq (alpine)
-RUN apk add --no-cache libpq
+# 依存関係をインストール
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt && \
+    rm -rf /root/.cache
 
 # ソースコード
 COPY --chown=appuser:appgroup src/ ./
