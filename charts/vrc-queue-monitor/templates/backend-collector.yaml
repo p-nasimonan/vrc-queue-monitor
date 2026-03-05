@@ -47,6 +47,11 @@ spec:
                 secretKeyRef:
                   name: {{ include "vrc-queue-monitor.secretName" . }}
                   key: VRC_TOTP_SECRET
+            - name: TOTP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "vrc-queue-monitor.secretName" . }}
+                  key: TOTP_SECRET
             - name: VRC_GROUP_ID
               valueFrom:
                 secretKeyRef:
