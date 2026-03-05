@@ -57,6 +57,8 @@ backendApi:
     SCHEDULE_START_TIME: "22:00"
     SCHEDULE_DURATION_MINUTES: "150"
     POLL_INTERVAL_MINUTES: "5"
+    ## フロントエンドのドメインを指定（Next.js経由なら不要だが念のため設定）
+    ## CORS_ORIGINS: "https://vrc-monitor.example.com"
 
 ## ── バックエンド コレクター ───────────────────────────
 backendCollector:
@@ -130,6 +132,9 @@ secrets:
   vrcGroupId: ""
 
 ## ── Ingress ──────────────────────────────────────────
+## /api/* を直接 backend-api にルーティングしてはいけない。
+## Next.js の rewrites() がサーバーサイドでプロキシするため、
+## すべてのリクエストを frontend 経由にすること（CORSエラー回避）。
 ingress:
   enabled: false
   className: nginx
@@ -140,9 +145,6 @@ ingress:
         - path: /
           pathType: Prefix
           service: frontend
-        - path: /api
-          pathType: Prefix
-          service: backend-api
   tls: []
   # tls:
   #   - secretName: vrc-monitor-tls

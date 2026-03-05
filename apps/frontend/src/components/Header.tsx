@@ -7,9 +7,10 @@ import { ConfigPanel } from "./ConfigPanel";
 
 interface HeaderProps {
   lastUpdated?: Date | null;
+  siteName: string;
 }
 
-export function Header({ lastUpdated }: HeaderProps) {
+export function Header({ lastUpdated, siteName }: HeaderProps) {
   return (
     <header
       className={css({
@@ -39,7 +40,7 @@ export function Header({ lastUpdated }: HeaderProps) {
               letterSpacing: "tight",
             })}
           >
-            🐾 {config.siteName}
+            🐾 {siteName}
           </h1>
           {lastUpdated && (
             <p className={css({ fontSize: "xs", color: "text.muted", mt: "1px" })}>

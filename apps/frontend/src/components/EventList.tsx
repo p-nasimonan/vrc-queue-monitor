@@ -9,9 +9,10 @@ import { config } from "@/lib/config";
 
 interface EventListProps {
   initialEvents: EventGroup[];
+  siteName: string;
 }
 
-export function EventList({ initialEvents }: EventListProps) {
+export function EventList({ initialEvents, siteName }: EventListProps) {
   const [events, setEvents] = useState(initialEvents);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -55,7 +56,7 @@ export function EventList({ initialEvents }: EventListProps) {
 
   return (
     <div className={css({ minH: "100vh", bg: "bg" })}>
-      <Header lastUpdated={lastUpdated} />
+      <Header lastUpdated={lastUpdated} siteName={siteName} />
 
       <main className={css({ maxW: "1400px", mx: "auto", px: 4, py: 4 })}>
         {/* ローディングインジケーター */}
