@@ -11,9 +11,9 @@ data:
   {{- with .Values.frontend.config }}
   {{- toYaml . | nindent 2 }}
   {{- end }}
-  ## バックエンドAPIのURLを自動生成（上書きされていない場合）
-  {{- if not (hasKey .Values.frontend.config "NEXT_PUBLIC_API_URL") }}
-  NEXT_PUBLIC_API_URL: "http://{{ .Release.Name }}-backend-api:{{ .Values.backendApi.service.port }}"
+  ## バックエンドAPIのURLを自動生成（サーバーサイド環境変数）
+  {{- if not (hasKey .Values.frontend.config "BACKEND_API_URL") }}
+  BACKEND_API_URL: "http://{{ .Release.Name }}-backend-api:{{ .Values.backendApi.service.port }}"
   {{- end }}
 {{- end }}
 ---

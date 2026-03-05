@@ -28,9 +28,9 @@ frontend:
     NEXT_PUBLIC_DISPLAY_DAYS: "30"
     NEXT_PUBLIC_DEFAULT_THEME: "light"
     NEXT_PUBLIC_USE_MOCK_API: "false"
-    ## API URL は自動設定される（backendApi.service.name:port）
+    ## BACKEND_API_URL はサーバーサイド変数。自動設定される（backendApi.service.name:port）
     ## 上書きしたい場合は以下をコメントアウト
-    # NEXT_PUBLIC_API_URL: "https://api.example.com"
+    # BACKEND_API_URL: "https://api.example.com"
 
 ## ── バックエンド API ──────────────────────────────────
 backendApi:
@@ -54,8 +54,8 @@ backendApi:
     ENV: "production"
     SCHEDULE_TYPE: "always"
     SCHEDULE_DAYS: ""
-    SCHEDULE_START_TIME: "21:00"
-    SCHEDULE_END_TIME: "02:00"
+    SCHEDULE_START_TIME: "22:00"
+    SCHEDULE_DURATION_MINUTES: "150"
     POLL_INTERVAL_MINUTES: "5"
 
 ## ── バックエンド コレクター ───────────────────────────
@@ -78,8 +78,8 @@ backendCollector:
     BURST_INTERVAL_SECONDS: "30"
     SCHEDULE_TYPE: "always"
     SCHEDULE_DAYS: ""
-    SCHEDULE_START_TIME: "21:00"
-    SCHEDULE_END_TIME: "02:00"
+    SCHEDULE_START_TIME: "22:00"
+    SCHEDULE_DURATION_MINUTES: "150"
 
 ## ── PostgreSQL ────────────────────────────────────────
 postgres:
