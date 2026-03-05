@@ -123,17 +123,24 @@ class Database:
             if not location:
                 continue
 
-            # デバッグ: インスタンスデータの構造を確認
-            logger.debug(f"Instance data keys: {list(instance.keys())}")
-            logger.debug(f"Queue size field: queueSize={instance.get('queueSize')}, queue_size={instance.get('queue_size')}")
-
             # インスタンス情報を抽出
             name = instance.get("name", "Unknown")
             world_name = instance.get("world", {}).get("name", "Unknown")
             capacity = instance.get("capacity", 0)
-            # queueSize (キャメルケース) または queue_size (スネークケース) を試す
-            queue_size = instance.get("queueSize") or instance.get("queue_size") or 0
-            current_users = instance.get("n_users", 0) or instance.get("userCount", 0) or instance.get("user_count", 0)
+
+            # queueSize取得（queueEnabledがTrueの場合のみ有効）
+            queue_enabled = instance.get("queueEnabled", False) or instance.get("queue_enabled", False)
+            if queue_enabled:
+                queue_size = instance.get("queueSize", 0) or instance.get("queue_size", 0)
+            else:
+                queue_size = 0
+
+            # n_usersが正しいフィールド名
+            current_users = instance.get("n_users", 0)
+
+            # デバッグログ
+            logger.debug(f"Instance '{name}': users={current_users}, queue={queue_size}, "
+                        f"queueEnabled={queue_enabled}, capacity={capacity}")
 
             # インスタンスをUpsert
             instance_id = self.upsert_instance(location, name, world_name, capacity)

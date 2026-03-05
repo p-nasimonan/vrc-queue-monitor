@@ -146,14 +146,11 @@ class VRChatAPI:
         try:
             instance = self.instances_api.get_instance(world_id, instance_id)
             instance_dict = instance.to_dict()
-            # デバッグ: APIレスポンスのキーを確認
-            logger.debug(f"Instance API response keys: {list(instance_dict.keys())}")
-            if logger.level <= logging.DEBUG:
-                logger.debug(f"Instance detail: name={instance_dict.get('name')}, "
-                           f"queueSize={instance_dict.get('queueSize')}, "
-                           f"queue_size={instance_dict.get('queue_size')}, "
-                           f"n_users={instance_dict.get('n_users')}, "
-                           f"userCount={instance_dict.get('userCount')}")
+            # デバッグ: 主要フィールドを確認
+            logger.debug(f"Fetched {instance_dict.get('name')}: "
+                        f"n_users={instance_dict.get('n_users')}, "
+                        f"queueEnabled={instance_dict.get('queueEnabled')}, "
+                        f"queueSize={instance_dict.get('queueSize')}")
             return instance_dict
 
         except UnauthorizedException as e:
