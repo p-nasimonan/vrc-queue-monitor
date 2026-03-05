@@ -128,6 +128,124 @@ def get_event_key(timestamp: datetime) -> str:
     return event_date.strftime("%Y-%m-%d")
 
 
+def _calculate_next_start() -> Optional[datetime]:
+    """次回収集開始時刻を計算（JST）"""
+    from zoneinfo import ZoneInfo
+    JST = ZoneInfo("Asia/Tokyo")
+
+    schedule_type = os.getenv("SCHEDULE_TYPE", "always")
+    schedule_days_str = os.getenv("SCHEDULE_DAYS", "")
+    start_time_str = os.getenv("SCHEDULE_START_TIME", "00:00")
+
+    # 常時監視の場合は「次回」という概念がない
+    if schedule_type == "always":
+        return None
+
+    try:
+        start_hour, start_min = map(int, start_time_str.split(":"))
+    except (ValueError, IndexError):
+        return None
+
+    # 曜日マッピング
+    day_map = {
+        "mon": 0, "tue": 1, "wed": 2, "thu": 3,
+        "fri": 4, "sat": 5, "sun": 6,
+        "月": 0, "火": 1, "水": 2, "木": 3, "金": 4, "土": 5, "日": 6,
+    }
+    schedule_days = []
+    if schedule_days_str:
+        for part in schedule_days_str.lower().split(","):
+            part = part.strip()
+            if part in day_map:
+                schedule_days.append(day_map[part])
+            elif part.isdigit():
+                schedule_days.append(int(part))
+
+    now = datetime.now(JST)
+    # 最大14日間探索
+    for delta in range(0, 14):
+        candidate = (now + timedelta(days=delta)).replace(
+            hour=start_hour, minute=start_min, second=0, microsecond=0
+        )
+        if candidate <= now:
+            continue
+
+        if schedule_type == "weekday":
+            if not schedule_days or candidate.weekday() in schedule_days:
+                return candidate
+        elif schedule_type == "day_of_month":
+            if not schedule_days or candidate.day in schedule_days:
+                return candidate
+        else:
+            return candidate
+
+    return None
+
+
+@app.get("/api/config")
+async def get_config():
+    """現在の監視設定と次回収集開始時刻を取得"""
+    from zoneinfo import ZoneInfo
+    JST = ZoneInfo("Asia/Tokyo")
+
+    schedule_type = os.getenv("SCHEDULE_TYPE", "always")
+    schedule_days_str = os.getenv("SCHEDULE_DAYS", "")
+    start_time_str = os.getenv("SCHEDULE_START_TIME", "00:00")
+    end_time_str = os.getenv("SCHEDULE_END_TIME", "23:59")
+    poll_interval = int(os.getenv("POLL_INTERVAL_MINUTES", "2"))
+
+    # 曜日マッピング
+    day_map = {
+        "mon": 0, "tue": 1, "wed": 2, "thu": 3,
+        "fri": 4, "sat": 5, "sun": 6,
+        "月": 0, "火": 1, "水": 2, "木": 3, "金": 4, "土": 5, "日": 6,
+    }
+    schedule_days: list[int] = []
+    if schedule_days_str:
+        for part in schedule_days_str.lower().split(","):
+            part = part.strip()
+            if part in day_map:
+                schedule_days.append(day_map[part])
+            elif part.isdigit():
+                schedule_days.append(int(part))
+
+    # 現在アクティブかどうか
+    now = datetime.now(JST)
+    is_active = True
+    if schedule_type != "always":
+        try:
+            s_hour, s_min = map(int, start_time_str.split(":"))
+            e_hour, e_min = map(int, end_time_str.split(":"))
+            from datetime import time as dtime
+            start_t = dtime(s_hour, s_min)
+            end_t = dtime(e_hour, e_min)
+            current_t = now.time().replace(second=0, microsecond=0)
+
+            if schedule_type == "weekday" and schedule_days and now.weekday() not in schedule_days:
+                is_active = False
+            elif schedule_type == "day_of_month" and schedule_days and now.day not in schedule_days:
+                is_active = False
+            else:
+                if start_t > end_t:  # 日またぎ
+                    is_active = current_t >= start_t or current_t <= end_t
+                else:
+                    is_active = start_t <= current_t <= end_t
+        except (ValueError, IndexError):
+            pass
+
+    next_start = _calculate_next_start()
+
+    return {
+        "schedule_type": schedule_type,
+        "schedule_days": schedule_days,
+        "start_time": start_time_str,
+        "end_time": end_time_str,
+        "poll_interval_minutes": poll_interval,
+        "is_active_now": is_active,
+        "next_start": next_start.isoformat() if next_start else None,
+    }
+
+
 @app.get("/")
 async def root():
     """ヘルスチェック"""

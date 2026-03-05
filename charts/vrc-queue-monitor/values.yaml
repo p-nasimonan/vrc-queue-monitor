@@ -52,8 +52,11 @@ backendApi:
   config:
     API_PORT: "8000"
     ENV: "production"
+    SCHEDULE_TYPE: "always"
+    SCHEDULE_DAYS: ""
     SCHEDULE_START_TIME: "21:00"
     SCHEDULE_END_TIME: "02:00"
+    POLL_INTERVAL_MINUTES: "5"
 
 ## ── バックエンド コレクター ───────────────────────────
 backendCollector:
@@ -70,7 +73,8 @@ backendCollector:
       memory: 256Mi
   config:
     POLL_INTERVAL_MINUTES: "5"
-    SCHEDULE_TYPE: "time"
+    SCHEDULE_TYPE: "always"
+    SCHEDULE_DAYS: ""
     SCHEDULE_START_TIME: "21:00"
     SCHEDULE_END_TIME: "02:00"
 

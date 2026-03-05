@@ -33,6 +33,18 @@ export interface EventGroup {
   instances: InstanceWithMetrics[];
 }
 
+export interface MonitorConfig {
+  schedule_type: "always" | "weekday" | "day_of_month";
+  schedule_days: number[];
+  start_time: string;
+  end_time: string;
+  poll_interval_minutes: number;
+  is_active_now: boolean;
+  /** ISOString、常時監視の場合はnull */
+  next_start: string | null;
+}
+
+
 // モックデータ（開発用）
 function generateMockMetrics(instanceId: number, capacity: number, eventDate: Date): Metric[] {
   const metrics: Metric[] = [];
@@ -223,5 +235,35 @@ export async function checkApiHealth(): Promise<boolean> {
     return res.ok;
   } catch {
     return false;
+  }
+}
+
+export async function fetchConfig(): Promise<MonitorConfig> {
+  // モックモード
+  if (process.env.NEXT_PUBLIC_USE_MOCK_API === "true") {
+    // 次のイベントを翌日の22時に設定（モック）
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(22, 0, 0, 0);
+    return {
+      schedule_type: "day_of_month",
+      schedule_days: [5, 15, 25], // 5のつく日
+      start_time: "22:00",
+      end_time: "23:30",
+      poll_interval_minutes: 2,
+      is_active_now: false,
+      next_start: tomorrow.toISOString(),
+    };
+  }
+
+  try {
+    const res = await fetch(`${API_URL}/api/config`, { cache: "no-store" });
+    if (!res.ok) {
+      throw new Error(`API error: ${res.status}`);
+    }
+    return await res.json();
+  } catch (error) {
+    console.error("Failed to fetch config:", error);
+    throw error;
   }
 }

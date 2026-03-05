@@ -7,15 +7,48 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  Legend,
   ReferenceLine,
 } from "recharts";
-import { css } from "../../styled-system/css";
 import type { Metric } from "@/lib/api";
 
 interface QueueChartProps {
   metrics: Metric[];
   capacity: number;
+}
+
+interface TooltipPayload {
+  name: string;
+  value: number;
+  color: string;
+}
+
+interface CustomTooltipProps {
+  active?: boolean;
+  label?: string;
+  payload?: TooltipPayload[];
+}
+
+function CustomTooltip({ active, label, payload }: CustomTooltipProps) {
+  if (!active || !payload || payload.length === 0) return null;
+  return (
+    <div
+      style={{
+        background: "rgba(253, 250, 245, 0.97)",
+        border: "1px solid #E5CEAC",
+        borderRadius: "8px",
+        padding: "8px 12px",
+        fontSize: "12px",
+        boxShadow: "0 2px 8px rgba(80,50,20,0.1)",
+      }}
+    >
+      <p style={{ fontWeight: "bold", marginBottom: 4, color: "#4F3B1E" }}>{label}</p>
+      {payload.map((p) => (
+        <p key={p.name} style={{ color: p.color, margin: "2px 0" }}>
+          {p.name === "users" ? "参加中" : "待機列"}: {p.value}人
+        </p>
+      ))}
+    </div>
+  );
 }
 
 export function QueueChart({ metrics, capacity }: QueueChartProps) {
@@ -28,22 +61,19 @@ export function QueueChart({ metrics, capacity }: QueueChartProps) {
     queue: m.queue_size,
   }));
 
-  const maxValue = Math.max(
-    capacity,
-    ...data.map((d) => d.users + d.queue)
-  );
+  const maxValue = Math.max(capacity, ...data.map((d) => d.users + d.queue));
 
   if (data.length === 0) {
     return (
       <div
-        className={css({
-          h: "120px",
+        style={{
+          height: 160,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          color: "text.muted",
-          fontSize: "sm",
-        })}
+          color: "#9A9088",
+          fontSize: "13px",
+        }}
       >
         データなし
       </div>
@@ -51,58 +81,41 @@ export function QueueChart({ metrics, capacity }: QueueChartProps) {
   }
 
   return (
-    <div className={css({ h: "140px", w: "100%" })}>
+    <div style={{ height: 180, width: "100%" }}>
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+        <AreaChart data={data} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
           <defs>
-            <linearGradient id={`usersGrad-${metrics[0]?.instance_id}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#1E88E5" stopOpacity={0.6} />
-              <stop offset="95%" stopColor="#1E88E5" stopOpacity={0.2} />
+            <linearGradient id={`ug-${metrics[0]?.instance_id}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#3D7EC8" stopOpacity={0.55} />
+              <stop offset="95%" stopColor="#3D7EC8" stopOpacity={0.08} />
             </linearGradient>
-            <linearGradient id={`queueGrad-${metrics[0]?.instance_id}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#FF9800" stopOpacity={0.8} />
-              <stop offset="95%" stopColor="#FF9800" stopOpacity={0.3} />
+            <linearGradient id={`qg-${metrics[0]?.instance_id}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#D4841A" stopOpacity={0.85} />
+              <stop offset="95%" stopColor="#D4841A" stopOpacity={0.2} />
             </linearGradient>
           </defs>
           <XAxis
             dataKey="time"
-            tick={{ fontSize: 10 }}
+            tick={{ fontSize: 9, fill: "#9A9088" }}
             tickLine={false}
             axisLine={false}
             interval="preserveStartEnd"
           />
           <YAxis
             domain={[0, maxValue + Math.ceil(maxValue * 0.05)]}
-            tick={{ fontSize: 10 }}
+            tick={{ fontSize: 9, fill: "#9A9088" }}
             tickLine={false}
             axisLine={false}
-            width={30}
+            width={28}
           />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: "rgba(255, 253, 247, 0.95)",
-              border: "1px solid #FFE799",
-              borderRadius: "8px",
-              fontSize: "12px",
-            }}
-            labelStyle={{ fontWeight: "bold" }}
-            formatter={(value: number, name: string) => [
-              `${value}人`,
-              name === "users" ? "参加中" : "待機列",
-            ]}
-          />
-          <Legend
-            iconSize={8}
-            wrapperStyle={{ fontSize: "10px" }}
-            formatter={(value) => (value === "users" ? "参加中" : "待機列")}
-          />
+          <Tooltip content={<CustomTooltip />} />
           {/* 定員ライン */}
           <ReferenceLine
             y={capacity}
-            stroke="#1E88E5"
+            stroke="#3D7EC8"
             strokeDasharray="4 2"
             strokeWidth={1}
-            opacity={0.5}
+            opacity={0.4}
           />
           {/* 参加者（下層） */}
           <Area
@@ -110,11 +123,11 @@ export function QueueChart({ metrics, capacity }: QueueChartProps) {
             dataKey="users"
             name="users"
             stackId="1"
-            stroke="#1E88E5"
+            stroke="#3D7EC8"
             strokeWidth={1.5}
-            fill={`url(#usersGrad-${metrics[0]?.instance_id})`}
+            fill={`url(#ug-${metrics[0]?.instance_id})`}
             dot={false}
-            activeDot={{ r: 3 }}
+            activeDot={{ r: 3, fill: "#3D7EC8" }}
           />
           {/* 待機列（上積み） */}
           <Area
@@ -122,11 +135,11 @@ export function QueueChart({ metrics, capacity }: QueueChartProps) {
             dataKey="queue"
             name="queue"
             stackId="1"
-            stroke="#FF9800"
+            stroke="#D4841A"
             strokeWidth={1.5}
-            fill={`url(#queueGrad-${metrics[0]?.instance_id})`}
+            fill={`url(#qg-${metrics[0]?.instance_id})`}
             dot={false}
-            activeDot={{ r: 3 }}
+            activeDot={{ r: 3, fill: "#D4841A" }}
           />
         </AreaChart>
       </ResponsiveContainer>

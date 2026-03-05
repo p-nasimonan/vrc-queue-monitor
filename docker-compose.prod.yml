@@ -65,8 +65,11 @@ services:
       DB_NAME: ${DB_NAME:-vrc_monitor}
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD}
+      SCHEDULE_TYPE: ${SCHEDULE_TYPE:-always}
+      SCHEDULE_DAYS: ${SCHEDULE_DAYS:-}
       SCHEDULE_START_TIME: ${SCHEDULE_START_TIME:-21:00}
       SCHEDULE_END_TIME: ${SCHEDULE_END_TIME:-02:00}
+      POLL_INTERVAL_MINUTES: ${POLL_INTERVAL_MINUTES:-5}
       API_PORT: 8000
       CORS_ORIGINS: ${CORS_ORIGINS:-https://your-domain.com}
       ENV: production

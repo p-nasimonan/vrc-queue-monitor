@@ -15,10 +15,11 @@ export function EventList({ initialEvents }: EventListProps) {
   const [events, setEvents] = useState(initialEvents);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [now, setNow] = useState<Date | null>(null);
 
-  // マウント後に初回の最終更新時刻をセット（SSR/CSR時刻差によるHydrationエラー回避）
   useEffect(() => {
     setLastUpdated(new Date());
+    setNow(new Date());
   }, []);
 
   const refreshEvents = useCallback(async () => {
@@ -27,6 +28,7 @@ export function EventList({ initialEvents }: EventListProps) {
       const data = await fetchEventGroups(config.displayDays);
       setEvents(data);
       setLastUpdated(new Date());
+      setNow(new Date());
     } catch (error) {
       console.error("Failed to fetch events:", error);
     } finally {
@@ -39,29 +41,30 @@ export function EventList({ initialEvents }: EventListProps) {
     return () => clearInterval(interval);
   }, [refreshEvents]);
 
-  const now = new Date();
-  const liveEvents = events.filter((e) => {
-    const start = new Date(e.startTime);
-    const end = new Date(e.endTime);
-    return now >= start && now <= end;
-  });
-  const pastEvents = events.filter((e) => {
-    const end = new Date(e.endTime);
-    return now > end;
-  });
+  // nowがnull（SSR）の場合は何もレンダリングしない
+  const liveEvents = now
+    ? events.filter((e) => {
+      const start = new Date(e.startTime);
+      const end = new Date(e.endTime);
+      return now >= start && now <= end;
+    })
+    : [];
+  const pastEvents = now
+    ? events.filter((e) => now > new Date(e.endTime))
+    : [];
 
   return (
     <div className={css({ minH: "100vh", bg: "bg" })}>
       <Header lastUpdated={lastUpdated} />
 
-      <main className={css({ maxW: "1400px", mx: "auto", p: 6 })}>
+      <main className={css({ maxW: "1400px", mx: "auto", px: 4, py: 4 })}>
         {/* ローディングインジケーター */}
         {isLoading && (
           <div
             className={css({
               position: "fixed",
-              top: 4,
-              right: 4,
+              top: 3,
+              right: 3,
               bg: "accent",
               color: "white",
               px: 3,
@@ -84,9 +87,7 @@ export function EventList({ initialEvents }: EventListProps) {
               color: "text.muted",
             })}
           >
-            <p className={css({ fontSize: "xl", mb: 2 })}>
-              データがありません
-            </p>
+            <p className={css({ fontSize: "xl", mb: 2 })}>データがありません</p>
             <p className={css({ fontSize: "sm" })}>
               イベントが開始されるとここに表示されます
             </p>
@@ -95,17 +96,36 @@ export function EventList({ initialEvents }: EventListProps) {
           <>
             {/* 進行中 */}
             {liveEvents.length > 0 && (
-              <div className={css({ mb: 8 })}>
-                <div className={css({ display: "flex", alignItems: "center", gap: 3, mb: 4 })}>
-                  <span className={css({
-                    display: "inline-flex", alignItems: "center", gap: 1,
-                    px: 3, py: 1, borderRadius: "full", fontSize: "sm", fontWeight: "bold",
-                    bg: "vrc.success", color: "white",
-                  })}>
-                    <span className={css({ w: "6px", h: "6px", borderRadius: "full", bg: "white", display: "inline-block", animation: "pulse 1.5s infinite" })} />
+              <div className={css({ mb: 6 })}>
+                <div className={css({ display: "flex", alignItems: "center", gap: 2, mb: 3 })}>
+                  <span
+                    className={css({
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 1,
+                      px: 2,
+                      py: "2px",
+                      borderRadius: "full",
+                      fontSize: "xs",
+                      fontWeight: "700",
+                      bg: "vrc.success",
+                      color: "white",
+                    })}
+                  >
+                    <span
+                      className={css({
+                        w: "5px",
+                        h: "5px",
+                        borderRadius: "full",
+                        bg: "white",
+                        display: "inline-block",
+                      })}
+                    />
                     LIVE
                   </span>
-                  <h2 className={css({ fontSize: "xl", fontWeight: "bold", color: "text" })}>進行中のイベント</h2>
+                  <h2 className={css({ fontSize: "lg", fontWeight: "700", color: "text" })}>
+                    進行中のイベント
+                  </h2>
                 </div>
                 {liveEvents.map((event) => (
                   <EventSection key={event.eventDate} event={event} defaultOpen isLive />
@@ -116,9 +136,16 @@ export function EventList({ initialEvents }: EventListProps) {
             {/* 過去のイベント */}
             {pastEvents.length > 0 && (
               <div>
-                <h2 className={css({ fontSize: "xl", fontWeight: "bold", color: "text", mb: 4 })}>過去のイベント</h2>
+                <h2 className={css({ fontSize: "lg", fontWeight: "700", color: "text", mb: 3 })}>
+                  過去のイベント
+                </h2>
                 {pastEvents.map((event, index) => (
-                  <EventSection key={event.eventDate} event={event} defaultOpen={index === 0 && liveEvents.length === 0} isLive={false} />
+                  <EventSection
+                    key={event.eventDate}
+                    event={event}
+                    defaultOpen={index === 0 && liveEvents.length === 0}
+                    isLive={false}
+                  />
                 ))}
               </div>
             )}
