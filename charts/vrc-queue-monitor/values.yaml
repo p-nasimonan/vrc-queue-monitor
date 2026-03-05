@@ -3,7 +3,7 @@ image:
   registry: ghcr.io
   repository: p-nasimonan/vrc-queue-monitor
   pullPolicy: IfNotPresent
-  tag: ""  # 空のときは Chart.yaml の appVersion を使用
+  tag: "latest"  # 空のときは Chart.yaml の appVersion を使用
 
 ## ── フロントエンド ────────────────────────────────────
 frontend:
