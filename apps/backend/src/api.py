@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 from db import Database
 from scheduler import ScheduleConfig
@@ -59,14 +59,12 @@ class InstanceWithMetricsResponse(BaseModel):
 
 
 class EventGroupResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     event_date: str = Field(alias="eventDate")
     start_time: datetime = Field(alias="startTime")
     end_time: datetime = Field(alias="endTime")
     instances: List[InstanceWithMetricsResponse]
-
-    class Config:
-        populate_by_name = True
-
 
 # Database instance
 db = Database()

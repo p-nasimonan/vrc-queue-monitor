@@ -11,17 +11,8 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  // バックエンド API へのリクエストをサーバーサイドでプロキシ
-  // BACKEND_API_URL はビルド後の実行時に参照されるサーバーサイド環境変数
-  async rewrites() {
-    const backendUrl = process.env.BACKEND_API_URL || "http://localhost:8000";
-    return [
-      {
-        source: "/api/:path*",
-        destination: `${backendUrl}/api/:path*`,
-      },
-    ];
-  },
+  // /api/* のプロキシは src/app/api/[...path]/route.ts で実行時に処理
+  // （rewrites() はビルド時評価のため k8s では使えない）
 };
 
 export default nextConfig;

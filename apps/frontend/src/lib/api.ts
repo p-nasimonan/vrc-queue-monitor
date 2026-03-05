@@ -4,14 +4,16 @@
 
 /**
  * サーバーサイド（RSC/SSR）は BACKEND_API_URL を直接使用。
- * クライアントサイドは相対パス /api/... を使用し Next.js rewrite でプロキシされる。
+ * クライアントサイドは相対パス /api/... を使用し、
+ * src/app/api/[...path]/route.ts の Route Handler が実行時にプロキシする。
+ * （rewrites() はビルド時評価のため k8s では BACKEND_API_URL を読めない）
  */
 const getApiBase = (): string => {
   if (typeof window === "undefined") {
     // サーバーサイド: 環境変数からバックエンド URL を直接参照
     return process.env.BACKEND_API_URL || "http://localhost:8000";
   }
-  // クライアントサイド: 相対パス（Next.js rewrite がバックエンドにプロキシ）
+  // クライアントサイド: 相対パス（Route Handler がバックエンドにプロキシ）
   return "";
 };
 
