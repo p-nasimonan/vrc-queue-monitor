@@ -11,6 +11,10 @@ export interface Instance {
   name: string;
   world_name: string;
   capacity: number;
+  world_thumbnail_url?: string | null;
+  world_image_url?: string | null;
+  instance_type?: string | null;
+  region?: string | null;
   created_at: string;
   is_active: boolean;
 }
@@ -106,6 +110,10 @@ function generateMockData(): EventGroup[] {
       name: `Instance ${String.fromCharCode(65 + i)}`,
       world_name: "VRC Event World",
       capacity,
+      world_thumbnail_url: "https://api.vrchat.cloud/api/1/image/file_xxx/1/256",
+      world_image_url: "https://api.vrchat.cloud/api/1/file/file_xxx/1/file",
+      instance_type: "public",
+      region: "jp",
       created_at: todayStart.toISOString(),
       is_active: true,
       metrics: generateMockMetrics(i + 1, capacity, todayStart),
@@ -140,6 +148,10 @@ function generateMockData(): EventGroup[] {
         name: `Instance ${String.fromCharCode(65 + i)}`,
         world_name: "VRC Event World",
         capacity,
+        world_thumbnail_url: "https://api.vrchat.cloud/api/1/image/file_xxx/1/256",
+        world_image_url: "https://api.vrchat.cloud/api/1/file/file_xxx/1/file",
+        instance_type: "public",
+        region: "jp",
         created_at: startTime.toISOString(),
         is_active: true,
         metrics: generateMockMetrics(d * 10 + i + 1, capacity, startTime),

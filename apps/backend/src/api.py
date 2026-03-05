@@ -34,6 +34,10 @@ class InstanceResponse(BaseModel):
     name: str
     world_name: str
     capacity: int
+    world_thumbnail_url: Optional[str] = None
+    world_image_url: Optional[str] = None
+    instance_type: Optional[str] = None
+    region: Optional[str] = None
     created_at: datetime
     is_active: bool
 
@@ -44,6 +48,10 @@ class InstanceWithMetricsResponse(BaseModel):
     name: str
     world_name: str
     capacity: int
+    world_thumbnail_url: Optional[str] = None
+    world_image_url: Optional[str] = None
+    instance_type: Optional[str] = None
+    region: Optional[str] = None
     created_at: datetime
     is_active: bool
     metrics: List[MetricResponse]

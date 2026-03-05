@@ -51,7 +51,17 @@ class Database:
             self.conn.close()
             logger.info("Database connection closed")
 
-    def upsert_instance(self, location: str, name: str, world_name: str, capacity: int) -> Optional[int]:
+    def upsert_instance(
+        self,
+        location: str,
+        name: str,
+        world_name: str,
+        capacity: int,
+        world_thumbnail_url: Optional[str] = None,
+        world_image_url: Optional[str] = None,
+        instance_type: Optional[str] = None,
+        region: Optional[str] = None
+    ) -> Optional[int]:
         """
         インスタンスをUpsert（なければ追加、あれば更新）
 
@@ -64,15 +74,22 @@ class Database:
         try:
             with self.conn.cursor() as cur:
                 cur.execute("""
-                    INSERT INTO instances (location, name, world_name, capacity)
-                    VALUES (%s, %s, %s, %s)
+                    INSERT INTO instances (
+                        location, name, world_name, capacity,
+                        world_thumbnail_url, world_image_url, instance_type, region
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (location) DO UPDATE SET
                         name = EXCLUDED.name,
                         world_name = EXCLUDED.world_name,
                         capacity = EXCLUDED.capacity,
+                        world_thumbnail_url = EXCLUDED.world_thumbnail_url,
+                        world_image_url = EXCLUDED.world_image_url,
+                        instance_type = EXCLUDED.instance_type,
+                        region = EXCLUDED.region,
                         is_active = TRUE
                     RETURNING id
-                """, (location, name, world_name, capacity))
+                """, (location, name, world_name, capacity, world_thumbnail_url, world_image_url, instance_type, region))
 
                 result = cur.fetchone()
                 self.conn.commit()
@@ -163,7 +180,9 @@ class Database:
         try:
             with self.conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
-                    SELECT id, location, name, world_name, capacity, created_at
+                    SELECT id, location, name, world_name, capacity,
+                           world_thumbnail_url, world_image_url, instance_type, region,
+                           created_at
                     FROM instances
                     WHERE is_active = TRUE
                     ORDER BY created_at DESC

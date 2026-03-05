@@ -4,6 +4,7 @@ import { css } from "../../styled-system/css";
 import type { InstanceWithMetrics } from "@/lib/api";
 import { QueueChart } from "./QueueChart";
 import { getInstanceStatus, getCapacityColor, getQueueStatusColor } from "@/styles/utils";
+import Image from "next/image";
 
 interface InstanceCardProps {
   instance: InstanceWithMetrics;
@@ -28,6 +29,54 @@ export function InstanceCard({ instance, isLive = false }: InstanceCardProps) {
         _hover: { boxShadow: "md" },
       })}
     >
+      {/* サムネイル（あれば表示） */}
+      {instance.world_thumbnail_url && (
+        <div
+          className={css({
+            position: "relative",
+            width: "100%",
+            height: "120px",
+            bg: "bg.subtle",
+            overflow: "hidden",
+          })}
+        >
+          <Image
+            src={instance.world_thumbnail_url}
+            alt={instance.world_name}
+            fill
+            style={{ objectFit: "cover" }}
+            unoptimized
+          />
+          {/* インスタンスタイプとリージョンのオーバーレイ */}
+          <div
+            className={css({
+              position: "absolute",
+              bottom: 1,
+              right: 1,
+              display: "flex",
+              gap: 1,
+            })}
+          >
+            {instance.region && (
+              <span
+                className={css({
+                  px: 1.5,
+                  py: 0.5,
+                  bg: "rgba(0, 0, 0, 0.6)",
+                  color: "white",
+                  fontSize: "2xs",
+                  fontWeight: "600",
+                  borderRadius: "sm",
+                  textTransform: "uppercase",
+                })}
+              >
+                {instance.region}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ヘッダー：インスタンス名 + コンパクト数値 */}
       <div
         className={css({

@@ -7,6 +7,10 @@ CREATE TABLE IF NOT EXISTS instances (
     name TEXT NOT NULL,
     world_name TEXT NOT NULL,
     capacity SMALLINT NOT NULL DEFAULT 0,
+    world_thumbnail_url TEXT,
+    world_image_url TEXT,
+    instance_type TEXT,
+    region TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     is_active BOOLEAN NOT NULL DEFAULT TRUE
 );

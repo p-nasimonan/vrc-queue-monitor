@@ -73,6 +73,9 @@ backendCollector:
       memory: 256Mi
   config:
     POLL_INTERVAL_MINUTES: "5"
+    DISCOVERY_INTERVAL_MINUTES: "10"
+    BURST_DURATION_MINUTES: "5"
+    BURST_INTERVAL_SECONDS: "30"
     SCHEDULE_TYPE: "always"
     SCHEDULE_DAYS: ""
     SCHEDULE_START_TIME: "21:00"
