@@ -56,6 +56,7 @@ export function QueueChart({ metrics, capacity }: QueueChartProps) {
     time: new Date(m.timestamp).toLocaleTimeString("ja-JP", {
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: "Asia/Tokyo",
     }),
     users: m.current_users,
     queue: m.queue_size,

@@ -22,6 +22,7 @@ export function EventSection({ event, defaultOpen = false, isLive = false }: Eve
       month: "long",
       day: "numeric",
       weekday: "short",
+      timeZone: "Asia/Tokyo",
     };
     return date.toLocaleDateString("ja-JP", options);
   };
@@ -30,6 +31,7 @@ export function EventSection({ event, defaultOpen = false, isLive = false }: Eve
     return new Date(dateStr).toLocaleTimeString("ja-JP", {
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: "Asia/Tokyo",
     });
   };
 

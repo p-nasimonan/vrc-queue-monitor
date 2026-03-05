@@ -11,8 +11,9 @@ from db import Database
 from scheduler import ScheduleConfig
 
 # ログ設定
+log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, log_level, logging.INFO),
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     handlers=[logging.StreamHandler(sys.stdout)]
 )
@@ -74,10 +75,17 @@ def main():
         logger.error("Failed to connect to database")
         sys.exit(1)
 
-    # VRChat認証確認
-    if not api.login():
-        logger.error("Failed to authenticate with VRChat API")
-        sys.exit(1)
+    # VRChat認証確認（リトライあり）
+    max_retries = 3
+    for attempt in range(1, max_retries + 1):
+        logger.info(f"Attempting VRChat authentication (attempt {attempt}/{max_retries})...")
+        if api.login():
+            break
+        if attempt < max_retries:
+            logger.warning(f"Authentication failed, retrying...")
+        else:
+            logger.error("Failed to authenticate with VRChat API after all retries")
+            sys.exit(1)
 
     # 初回実行（スケジュール範囲内なら）
     if schedule_config.is_active_now():

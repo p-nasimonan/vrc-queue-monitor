@@ -4,6 +4,7 @@ import os
 import time
 import logging
 from typing import Optional
+from datetime import datetime, timedelta
 
 import vrchatapi
 from vrchatapi.api import authentication_api, groups_api, instances_api
@@ -23,9 +24,28 @@ class VRChatAPI:
         self.groups_api: Optional[groups_api.GroupsApi] = None
         self.instances_api: Optional[instances_api.InstancesApi] = None
         self._authenticated = False
+        self._last_login_attempt: Optional[datetime] = None
+        self._rate_limit_until: Optional[datetime] = None
 
     def login(self) -> bool:
         """VRChatにログインし、セッションを確立する"""
+        # レート制限チェック
+        now = datetime.now()
+        if self._rate_limit_until and now < self._rate_limit_until:
+            wait_seconds = (self._rate_limit_until - now).total_seconds()
+            logger.warning(f"Rate limited. Waiting {wait_seconds:.0f} seconds before retry...")
+            time.sleep(wait_seconds)
+
+        # 最後のログイン試行から最低5秒は待つ
+        if self._last_login_attempt:
+            elapsed = (now - self._last_login_attempt).total_seconds()
+            if elapsed < 5:
+                wait = 5 - elapsed
+                logger.info(f"Waiting {wait:.1f}s before login attempt...")
+                time.sleep(wait)
+
+        self._last_login_attempt = datetime.now()
+
         username = os.environ.get("VRC_USERNAME")
         password = os.environ.get("VRC_PASSWORD")
         totp_secret = os.environ.get("TOTP_SECRET")
@@ -79,11 +99,18 @@ class VRChatAPI:
                     return False
 
             self._authenticated = True
+            self._rate_limit_until = None  # ログイン成功でリセット
             logger.info(f"Logged in as: {current_user.display_name}")
             return True
 
         except ApiException as e:
-            logger.error(f"API Exception during login: {e}")
+            # Retry-After ヘッダーをチェック
+            if hasattr(e, 'headers') and 'Retry-After' in e.headers:
+                retry_after = int(e.headers['Retry-After'])
+                self._rate_limit_until = datetime.now() + timedelta(seconds=retry_after)
+                logger.error(f"Rate limited. Retry after {retry_after} seconds")
+            else:
+                logger.error(f"API Exception during login: {e}")
             return False
         except Exception as e:
             logger.error(f"Login error: {e}")
@@ -92,11 +119,8 @@ class VRChatAPI:
     def ensure_authenticated(self) -> bool:
         """認証済みか確認し、必要ならログインする"""
         if self._authenticated and self.auth_api:
-            try:
-                self.auth_api.get_current_user()
-                return True
-            except Exception:
-                self._authenticated = False
+            # 既に認証済みならそのまま返す（毎回チェックしない）
+            return True
 
         return self.login()
 
@@ -119,21 +143,39 @@ class VRChatAPI:
 
     def get_instance_detail(self, world_id: str, instance_id: str) -> Optional[dict]:
         """インスタンスの詳細情報（queueSize含む）を取得"""
-        if not self.ensure_authenticated():
-            return None
-
         try:
             instance = self.instances_api.get_instance(world_id, instance_id)
-            return instance.to_dict()
+            instance_dict = instance.to_dict()
+            # デバッグ: APIレスポンスのキーを確認
+            logger.debug(f"Instance API response keys: {list(instance_dict.keys())}")
+            if logger.level <= logging.DEBUG:
+                logger.debug(f"Instance detail: name={instance_dict.get('name')}, "
+                           f"queueSize={instance_dict.get('queueSize')}, "
+                           f"queue_size={instance_dict.get('queue_size')}, "
+                           f"n_users={instance_dict.get('n_users')}, "
+                           f"userCount={instance_dict.get('userCount')}")
+            return instance_dict
 
+        except UnauthorizedException as e:
+            # 認証切れの場合は再ログイン
+            logger.warning(f"Authentication expired, retrying login...")
+            self._authenticated = False
+            if self.ensure_authenticated():
+                try:
+                    instance = self.instances_api.get_instance(world_id, instance_id)
+                    return instance.to_dict()
+                except Exception as retry_e:
+                    logger.error(f"Retry failed: {retry_e}")
+                    return None
+            return None
         except ApiException as e:
-            logger.warning(f"Failed to get instance detail: {e}")
+            logger.warning(f"Failed to get instance detail ({world_id}:{instance_id}): {e}")
             return None
         except Exception as e:
             logger.error(f"Error getting instance detail: {e}")
             return None
 
-    def get_instances_with_queue(self, group_id: str, request_interval: float = 1.0) -> list[dict]:
+    def get_instances_with_queue(self, group_id: str, request_interval: float = 2.0) -> list[dict]:
         """
         グループの全インスタンスとそのqueueSizeを取得
 
@@ -162,13 +204,13 @@ class VRChatAPI:
                 logger.warning(f"Invalid location format: {location}")
                 continue
 
+            # Rate Limit対策（リクエスト前に待機）
+            if i > 0:
+                time.sleep(request_interval)
+
             detail = self.get_instance_detail(world_id, instance_id)
             if detail:
                 results.append(detail)
-
-            # Rate Limit対策（最後のリクエスト以外）
-            if i < len(instances) - 1:
-                time.sleep(request_interval)
 
         logger.info(f"Retrieved details for {len(results)} instances")
         return results
