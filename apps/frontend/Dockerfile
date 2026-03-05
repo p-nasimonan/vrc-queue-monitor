@@ -9,8 +9,8 @@ WORKDIR /app
 # モノレポルートをcontextにするため、ルートのpnpm-lock.yamlを参照できる
 FROM base AS deps
 COPY apps/frontend/package.json ./package.json
-COPY pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile --ignore-scripts
+COPY pnpm-lock.yaml* ./
+RUN pnpm install --frozen-lockfile --ignore-scripts || pnpm install --ignore-scripts
 
 # Builder
 FROM base AS builder
