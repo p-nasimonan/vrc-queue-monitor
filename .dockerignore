@@ -1,0 +1,29 @@
+# Node.js
+node_modules
+**/node_modules
+
+# Next.js
+apps/frontend/.next
+apps/frontend/styled-system
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+
+# Python
+**/__pycache__
+**/*.pyc
+apps/backend/.env
+
+# Docker
+**/Dockerfile
+**/.dockerignore
+
+# ログ・テンポラリ
+*.log
+.DS_Store

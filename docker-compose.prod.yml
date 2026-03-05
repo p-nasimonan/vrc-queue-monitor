@@ -78,7 +78,8 @@ services:
   # Frontend Viewer (Next.js)
   frontend:
     build:
-      context: ./apps/frontend
+      context: .
+      dockerfile: apps/frontend/Dockerfile
       target: runner
     container_name: vrc-monitor-frontend
     depends_on:

@@ -6,14 +6,16 @@ RUN corepack enable && corepack prepare pnpm@10.30.0 --activate
 WORKDIR /app
 
 # Dependencies
+# モノレポルートをcontextにするため、ルートのpnpm-lock.yamlを参照できる
 FROM base AS deps
-COPY package.json pnpm-lock.yaml* ./
-RUN pnpm install --frozen-lockfile --ignore-scripts || pnpm install --ignore-scripts
+COPY apps/frontend/package.json ./package.json
+COPY pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # Builder
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+COPY apps/frontend/ .
 
 # Generate Panda CSS
 RUN pnpm prepare
@@ -32,6 +34,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
+# publicディレクトリが存在しない場合に備えて先に作成
+RUN mkdir -p ./public
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
