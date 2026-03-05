@@ -1,12 +1,12 @@
 "use client";
 
-import { css } from "../../styled-system/css";
+import { css, cx } from "../../styled-system/css";
 import { ThemeToggle } from "./ThemeToggle";
 import { config } from "@/lib/config";
 import { badgeRecipe } from "@/styles/recipes";
 
 interface HeaderProps {
-  lastUpdated?: Date;
+  lastUpdated?: Date | null;
 }
 
 export function Header({ lastUpdated }: HeaderProps) {
@@ -45,7 +45,7 @@ export function Header({ lastUpdated }: HeaderProps) {
 
       <div className={css({ display: "flex", alignItems: "center", gap: 3 })}>
         <span
-          className={badgeRecipe({ variant: "muted" }) + " " + css({ display: { base: "none", md: "inline-flex" } })}
+          className={cx(badgeRecipe({ variant: "muted" }), css({ display: { base: "none", md: "inline-flex" } }))}
         >
           {config.refreshInterval / 1000}秒ごとに自動更新
         </span>

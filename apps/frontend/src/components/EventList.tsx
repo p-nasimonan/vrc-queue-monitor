@@ -13,8 +13,13 @@ interface EventListProps {
 
 export function EventList({ initialEvents }: EventListProps) {
   const [events, setEvents] = useState(initialEvents);
-  const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // マウント後に初回の最終更新時刻をセット（SSR/CSR時刻差によるHydrationエラー回避）
+  useEffect(() => {
+    setLastUpdated(new Date());
+  }, []);
 
   const refreshEvents = useCallback(async () => {
     setIsLoading(true);
@@ -33,6 +38,17 @@ export function EventList({ initialEvents }: EventListProps) {
     const interval = setInterval(refreshEvents, config.refreshInterval);
     return () => clearInterval(interval);
   }, [refreshEvents]);
+
+  const now = new Date();
+  const liveEvents = events.filter((e) => {
+    const start = new Date(e.startTime);
+    const end = new Date(e.endTime);
+    return now >= start && now <= end;
+  });
+  const pastEvents = events.filter((e) => {
+    const end = new Date(e.endTime);
+    return now > end;
+  });
 
   return (
     <div className={css({ minH: "100vh", bg: "bg" })}>
@@ -75,52 +91,39 @@ export function EventList({ initialEvents }: EventListProps) {
               イベントが開始されるとここに表示されます
             </p>
           </div>
-        ) : (() => {
-          const now = new Date();
-          const liveEvents = events.filter((e) => {
-            const start = new Date(e.startTime);
-            const end = new Date(e.endTime);
-            return now >= start && now <= end;
-          });
-          const pastEvents = events.filter((e) => {
-            const end = new Date(e.endTime);
-            return now > end;
-          });
-
-          return (
-            <>
-              {/* 進行中 */}
-              {liveEvents.length > 0 && (
-                <div className={css({ mb: 8 })}>
-                  <div className={css({ display: "flex", alignItems: "center", gap: 3, mb: 4 })}>
-                    <span className={css({
-                      display: "inline-flex", alignItems: "center", gap: 1,
-                      px: 3, py: 1, borderRadius: "full", fontSize: "sm", fontWeight: "bold",
-                      bg: "vrc.success", color: "white",
-                    })}>
-                      <span className={css({ w: "6px", h: "6px", borderRadius: "full", bg: "white", display: "inline-block", animation: "pulse 1.5s infinite" })} />
-                      LIVE
-                    </span>
-                    <h2 className={css({ fontSize: "xl", fontWeight: "bold", color: "text" })}>進行中のイベント</h2>
-                  </div>
-                  {liveEvents.map((event) => (
-                    <EventSection key={event.eventDate} event={event} defaultOpen isLive />
-                  ))}
+        ) : (
+          <>
+            {/* 進行中 */}
+            {liveEvents.length > 0 && (
+              <div className={css({ mb: 8 })}>
+                <div className={css({ display: "flex", alignItems: "center", gap: 3, mb: 4 })}>
+                  <span className={css({
+                    display: "inline-flex", alignItems: "center", gap: 1,
+                    px: 3, py: 1, borderRadius: "full", fontSize: "sm", fontWeight: "bold",
+                    bg: "vrc.success", color: "white",
+                  })}>
+                    <span className={css({ w: "6px", h: "6px", borderRadius: "full", bg: "white", display: "inline-block", animation: "pulse 1.5s infinite" })} />
+                    LIVE
+                  </span>
+                  <h2 className={css({ fontSize: "xl", fontWeight: "bold", color: "text" })}>進行中のイベント</h2>
                 </div>
-              )}
+                {liveEvents.map((event) => (
+                  <EventSection key={event.eventDate} event={event} defaultOpen isLive />
+                ))}
+              </div>
+            )}
 
-              {/* 過去のイベント */}
-              {pastEvents.length > 0 && (
-                <div>
-                  <h2 className={css({ fontSize: "xl", fontWeight: "bold", color: "text", mb: 4 })}>過去のイベント</h2>
-                  {pastEvents.map((event, index) => (
-                    <EventSection key={event.eventDate} event={event} defaultOpen={index === 0 && liveEvents.length === 0} isLive={false} />
-                  ))}
-                </div>
-              )}
-            </>
-          );
-        })()}
+            {/* 過去のイベント */}
+            {pastEvents.length > 0 && (
+              <div>
+                <h2 className={css({ fontSize: "xl", fontWeight: "bold", color: "text", mb: 4 })}>過去のイベント</h2>
+                {pastEvents.map((event, index) => (
+                  <EventSection key={event.eventDate} event={event} defaultOpen={index === 0 && liveEvents.length === 0} isLive={false} />
+                ))}
+              </div>
+            )}
+          </>
+        )}
       </main>
     </div>
   );

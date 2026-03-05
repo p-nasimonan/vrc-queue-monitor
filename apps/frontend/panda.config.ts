@@ -124,7 +124,7 @@ export default defineConfig({
             value: ["default", "elevated", "outlined"],
           },
         },
-        transform(props: any) {
+        transform(props: { variant?: "default" | "elevated" | "outlined"; [key: string]: unknown }) {
           const { variant, ...rest } = props;
           const base = {
             bg: "bg.card",
