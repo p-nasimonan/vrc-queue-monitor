@@ -49,13 +49,13 @@ export function InstanceCard({ instance, isLive = false }: InstanceCardProps) {
     >
       {/* サムネイル */}
       <div
-        style={{
+        className={css({
           position: "relative",
           width: "200px",
           height: "150px",
           flexShrink: 0,
-          backgroundColor: "var(--colors-bg-subtle, #f5f0e8)",
-        }}
+          bg: "bg.subtle",
+        })}
       >
         {instance.world_thumbnail_url && (
           <Image
@@ -68,18 +68,19 @@ export function InstanceCard({ instance, isLive = false }: InstanceCardProps) {
         )}
         {instance.region && (
           <span
-            style={{
+            className={css({
               position: "absolute",
-              bottom: 3,
-              right: 3,
-              background: "rgba(0,0,0,0.6)",
+              bottom: "3px",
+              right: "3px",
+              bg: "rgba(0,0,0,0.6)",
               color: "white",
               fontSize: "9px",
-              fontWeight: 600,
-              padding: "1px 4px",
-              borderRadius: 3,
+              fontWeight: "600",
+              px: "4px",
+              py: "1px",
+              borderRadius: "sm",
               textTransform: "uppercase",
-            }}
+            })}
           >
             {instance.region}
           </span>

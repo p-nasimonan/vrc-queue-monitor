@@ -73,7 +73,7 @@ export function InstanceDetailView({ instance, metrics }: InstanceDetailViewProp
         >
           {/* サムネイル */}
           {instance.world_thumbnail_url && (
-            <div style={{ position: "relative", width: "100%", aspectRatio: "16/9", backgroundColor: "var(--colors-bg-subtle, #f5f0e8)" }}>
+            <div className={css({ position: "relative", width: "100%", aspectRatio: "16/9", bg: "bg.subtle" })}>
               <Image
                 src={instance.world_thumbnail_url}
                 alt={instance.world_name}

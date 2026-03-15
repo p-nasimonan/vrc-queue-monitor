@@ -9,6 +9,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
+import { css } from "../../styled-system/css";
 import type { Metric } from "@/lib/api";
 import { useChartSettings } from "@/contexts/ChartSettings";
 import { config } from "@/lib/config";
@@ -38,22 +39,27 @@ interface CustomTooltipProps {
   payload?: TooltipPayload[];
 }
 
+// Recharts の CustomTooltip は Recharts が DOM 外に描画するため css() を使用
+const tooltipWrapperClass = css({
+  bg: "bg.card",
+  border: "1px solid",
+  borderColor: "border",
+  borderRadius: "lg",
+  px: 3,
+  py: 2,
+  fontSize: "xs",
+  boxShadow: "md",
+});
+const tooltipLabelClass = css({ fontWeight: "700", mb: 1, color: "text" });
+const tooltipRowClass = css({ my: "1px" });
+
 function CustomTooltip({ active, label, payload }: CustomTooltipProps) {
   if (!active || !payload || payload.length === 0) return null;
   return (
-    <div
-      style={{
-        background: "rgba(253, 250, 245, 0.97)",
-        border: "1px solid #E5CEAC",
-        borderRadius: "8px",
-        padding: "8px 12px",
-        fontSize: "12px",
-        boxShadow: "0 2px 8px rgba(80,50,20,0.1)",
-      }}
-    >
-      <p style={{ fontWeight: "bold", marginBottom: 4, color: "#4F3B1E" }}>{label}</p>
+    <div className={tooltipWrapperClass}>
+      <p className={tooltipLabelClass}>{label}</p>
       {payload.map((p) => (
-        <p key={p.name} style={{ color: p.color, margin: "2px 0" }}>
+        <p key={p.name} className={tooltipRowClass} style={{ color: p.color }}>
           {p.name === "users" ? "参加中" : "待機列"}: {p.value}人
         </p>
       ))}
