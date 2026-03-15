@@ -22,6 +22,7 @@ export interface Instance {
   id: number;
   location: string;
   name: string;
+  display_name?: string | null;
   world_name: string;
   capacity: number;
   world_thumbnail_url?: string | null;
@@ -37,6 +38,7 @@ export interface Metric {
   instance_id: number;
   queue_size: number;
   current_users: number;
+  pc_users?: number;
 }
 
 export interface InstanceWithMetrics extends Instance {
@@ -203,6 +205,12 @@ export async function fetchEventGroups(days: number = 30): Promise<EventGroup[]>
     console.error("Failed to fetch event groups:", error);
     throw error;
   }
+}
+
+export async function fetchInstance(instanceId: number): Promise<Instance> {
+  const res = await fetch(`${getApiBase()}/api/instances/${instanceId}`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  return await res.json();
 }
 
 export async function fetchInstances(activeOnly: boolean = true): Promise<Instance[]> {

@@ -16,4 +16,7 @@ export const config = {
 
   // デフォルトテーマ
   defaultTheme: (process.env.NEXT_PUBLIC_DEFAULT_THEME || "light") as "light" | "dark",
+
+  // タイムゾーン（チャート・時刻表示に使用）
+  timezone: process.env.NEXT_PUBLIC_TIMEZONE || "Asia/Tokyo",
 };

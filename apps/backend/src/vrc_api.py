@@ -146,14 +146,21 @@ class VRChatAPI:
         try:
             instance = self.instances_api.get_instance(world_id, instance_id)
             # vrchatapi SDK の Instance オブジェクトから安全に値を取得
-            # to_dict() するとスネークケースになるフィールドがあるため両方チェックする
             instance_dict = instance.to_dict()
+            
+            # 生のAPIレスポンスの構造確認用（LOG_LEVEL=DEBUGの時だけ出力される）
+            logger.debug(f"--- RAW API RESPONSE DUMP FOR {world_id}:{instance_id} ---")
+            logger.debug(str({k: v for k, v in instance_dict.items() if v is not None}))
             
             queue_enabled = instance.queue_enabled if hasattr(instance, 'queue_enabled') else instance_dict.get('queueEnabled', instance_dict.get('queue_enabled'))
             queue_size = instance.queue_size if hasattr(instance, 'queue_size') else instance_dict.get('queueSize', instance_dict.get('queue_size'))
-            n_users = instance.n_users if hasattr(instance, 'n_users') else instance_dict.get('n_users', 0)
             
-            name = instance.name if hasattr(instance, 'name') and instance.name else instance.instance_id if hasattr(instance, 'instance_id') else instance_dict.get("name", instance_dict.get("instance_id"))
+            # n_users と user_count (SDKの仕様揺れ対策)
+            n_users = getattr(instance, 'n_users', getattr(instance, 'user_count', instance_dict.get('n_users', instance_dict.get('userCount', 0))))
+            
+            # name と capacity
+            capacity = getattr(instance, 'capacity', instance_dict.get('capacity', 0))
+            name = getattr(instance, 'name', None) or getattr(instance, 'instance_id', None) or instance_dict.get("name", instance_dict.get("instanceId"))
 
             # デバッグ: 主要フィールドを確認
             logger.debug(f"Fetched {name}: "

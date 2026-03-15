@@ -20,6 +20,17 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _extract_world_images(world: dict | object) -> tuple[str | None, str | None]:
+    """ワールドオブジェクトからサムネイルURLと画像URLを取得（snake_case対応）"""
+    if isinstance(world, dict):
+        thumbnail = world.get("thumbnail_image_url") or world.get("thumbnailImageUrl")
+        image = world.get("image_url") or world.get("imageUrl")
+    else:
+        thumbnail = getattr(world, "thumbnail_image_url", None) or getattr(world, "thumbnailImageUrl", None)
+        image = getattr(world, "image_url", None) or getattr(world, "imageUrl", None)
+    return thumbnail, image
+
+
 def discover_instances(api: VRChatAPI, db: Database, group_id: str):
     """グループの新しいインスタンスを発見してDBに登録（低頻度）"""
     try:
@@ -28,32 +39,41 @@ def discover_instances(api: VRChatAPI, db: Database, group_id: str):
 
         if not group_instances:
             logger.info("No group instances found")
+            deactivated = db.deactivate_missing_instances([])
+            if deactivated > 0:
+                logger.info(f"Deactivated {deactivated} old instances")
             return
 
-        # インスタンスをDBに登録（メトリクスは取得しない）
+        active_locations = []
+
         for inst in group_instances:
             location = inst.get("location") or inst.get("instanceId")
             if not location:
                 continue
 
+            active_locations.append(location)
+
             name = inst.get("name", "Unknown")
+            display_name = inst.get("display_name") or inst.get("displayName") or ""
             world = inst.get("world", {})
             world_name = world.get("name", "Unknown") if isinstance(world, dict) else getattr(world, "name", "Unknown")
             capacity = inst.get("capacity", 0)
 
-            # ワールド情報を抽出
-            world_thumbnail_url = world.get("thumbnailImageUrl") if isinstance(world, dict) else getattr(world, "thumbnail_image_url", getattr(world, "thumbnailImageUrl", None))
-            world_image_url = world.get("imageUrl") if isinstance(world, dict) else getattr(world, "image_url", getattr(world, "imageUrl", None))
+            world_thumbnail_url, world_image_url = _extract_world_images(world)
 
-            # インスタンスタイプとリージョンを抽出
             instance_type = inst.get("type", "unknown")
             region = inst.get("region") or inst.get("photonRegion", "unknown")
 
             db.upsert_instance(
                 location, name, world_name, capacity,
                 world_thumbnail_url, world_image_url,
-                instance_type, region
+                instance_type, region,
+                display_name or None,
             )
+
+        deactivated = db.deactivate_missing_instances(active_locations)
+        if deactivated > 0:
+            logger.info(f"Deactivated {deactivated} old instances")
 
         logger.info(f"Discovered {len(group_instances)} instances")
 
@@ -64,17 +84,14 @@ def discover_instances(api: VRChatAPI, db: Database, group_id: str):
 def collect_metrics(api: VRChatAPI, db: Database, schedule_config: ScheduleConfig):
     """アクティブなインスタンスのメトリクスを収集（高頻度）"""
 
-    # スケジュール確認
     if not schedule_config.is_active_now():
         logger.debug("Outside of scheduled monitoring period, skipping collection")
         return
 
-    # バースト期間中かどうかをログ出力
     if schedule_config.is_in_burst_period():
         logger.info("📈 In BURST period - high frequency collection")
 
     try:
-        # DBから既知のアクティブなインスタンスを取得
         active_instances = db.get_active_instances()
 
         if not active_instances:
@@ -83,38 +100,53 @@ def collect_metrics(api: VRChatAPI, db: Database, schedule_config: ScheduleConfi
 
         logger.info(f"Collecting metrics for {len(active_instances)} instances...")
 
-        # 各インスタンスの詳細を取得
         saved_count = 0
         for inst in active_instances:
             location = inst["location"]
 
-            # location形式: wrld_xxx:12345~region(xx)
             if ":" not in location:
                 continue
 
             world_id, instance_id = location.split(":", 1)
 
-            # インスタンス詳細を取得（queueSize含む）
             detail = api.get_instance_detail(world_id, instance_id)
             if not detail:
                 continue
 
-            # メトリクスをDBに保存
-            queue_enabled = detail.get("queueEnabled") if "queueEnabled" in detail else detail.get("queue_enabled", False)
-            queue_size = detail.get("queueSize") if "queueSize" in detail else detail.get("queue_size", 0)
-            
-            # None対策
-            if queue_size is None:
-                queue_size = 0
+            # queue情報
+            queue_enabled = detail.get("queue_enabled", False)
             if queue_enabled is None:
                 queue_enabled = False
+            queue_size = detail.get("queue_size", 0) or 0
 
-            current_users = detail.get("n_users", 0)
+            current_users = detail.get("n_users", 0) or 0
 
-            if db.insert_metric(inst["id"], queue_size if queue_enabled else 0, current_users):
+            # プラットフォーム別ユーザー数
+            platforms = detail.get("platforms") or {}
+            pc_users = platforms.get("standalonewindows", 0) or 0
+
+            # インスタンス情報をdetailで更新（capacityなども正しい値で上書き）
+            capacity = detail.get("capacity", 0) or 0
+            display_name = detail.get("display_name") or detail.get("displayName") or None
+            world = detail.get("world") or {}
+            world_name = world.get("name", inst["world_name"]) if isinstance(world, dict) else inst["world_name"]
+            world_thumbnail_url, world_image_url = _extract_world_images(world)
+            instance_type = detail.get("type", inst.get("instance_type", "unknown"))
+            region = detail.get("region") or detail.get("photon_region") or inst.get("region", "unknown")
+            name = detail.get("name", inst["name"])
+
+            # インスタンス情報をDB更新（capacity, display_name等を正確な値で上書き）
+            db.upsert_instance(
+                location, name, world_name, capacity,
+                world_thumbnail_url or inst.get("world_thumbnail_url"),
+                world_image_url or inst.get("world_image_url"),
+                instance_type, region,
+                display_name,
+            )
+
+            if db.insert_metric(inst["id"], queue_size if queue_enabled else 0, current_users, pc_users):
                 saved_count += 1
 
-            # Rate Limit対策
             time.sleep(2.0)
 
         logger.info(f"Collection complete: {saved_count}/{len(active_instances)} metrics saved")
@@ -125,18 +157,14 @@ def collect_metrics(api: VRChatAPI, db: Database, schedule_config: ScheduleConfi
 
 def main():
     """メインエントリーポイント"""
-    # 環境変数チェック
     group_id = os.environ.get("VRC_GROUP_ID")
     if not group_id:
         logger.error("VRC_GROUP_ID environment variable is required")
         sys.exit(1)
 
-    # メトリクス収集間隔（高頻度）
     poll_interval = int(os.environ.get("POLL_INTERVAL_MINUTES", 2))
-    # インスタンス発見間隔（低頻度）
     discovery_interval = int(os.environ.get("DISCOVERY_INTERVAL_MINUTES", 10))
 
-    # スケジュール設定
     schedule_config = ScheduleConfig()
 
     logger.info("=" * 50)
@@ -147,16 +175,15 @@ def main():
     logger.info(f"Schedule: {schedule_config.get_status_message()}")
     logger.info("=" * 50)
 
-    # 初期化
     api = VRChatAPI()
     db = Database()
 
-    # DB接続確認
     if not db.connect():
         logger.error("Failed to connect to database")
         sys.exit(1)
 
-    # VRChat認証確認（リトライあり）
+    db.run_migrations()
+
     max_retries = 3
     for attempt in range(1, max_retries + 1):
         logger.info(f"Attempting VRChat authentication (attempt {attempt}/{max_retries})...")
@@ -168,19 +195,15 @@ def main():
             logger.error("Failed to authenticate with VRChat API after all retries")
             sys.exit(1)
 
-    # 初回: インスタンス発見
     logger.info("Running initial instance discovery...")
     discover_instances(api, db, group_id)
 
-    # 初回: メトリクス収集（スケジュール範囲内なら）
     if schedule_config.is_active_now():
         logger.info("Running initial metrics collection...")
         collect_metrics(api, db, schedule_config)
     else:
         logger.info("Outside of scheduled period, waiting for next active window...")
 
-    # スケジュール設定（動的間隔）
-    # インスタンス発見は固定間隔
     schedule.every(discovery_interval).minutes.do(
         discover_instances, api=api, db=db, group_id=group_id
     )
@@ -188,13 +211,11 @@ def main():
     logger.info(f"Scheduled: metrics adaptive (burst: {schedule_config.burst_interval_seconds}s, "
                 f"normal: {poll_interval}min), discovery every {discovery_interval}min")
 
-    # メインループ（動的間隔制御）
     last_metrics_collection = time.time()
     try:
         while True:
             schedule.run_pending()
 
-            # 動的なメトリクス収集間隔
             now = time.time()
             current_interval_minutes = schedule_config.get_current_poll_interval(poll_interval)
             interval_seconds = current_interval_minutes * 60
@@ -204,7 +225,7 @@ def main():
                     collect_metrics(api, db, schedule_config)
                 last_metrics_collection = now
 
-            time.sleep(5)  # 5秒ごとにチェック（バースト期間対応）
+            time.sleep(5)
     except KeyboardInterrupt:
         logger.info("Shutting down...")
     finally:

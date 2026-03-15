@@ -37,6 +37,7 @@ services:
       DB_NAME: ${DB_NAME:-vrc_monitor}
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      TZ: ${TZ:-Asia/Tokyo}
       POLL_INTERVAL_MINUTES: ${POLL_INTERVAL_MINUTES:-2}
       DISCOVERY_INTERVAL_MINUTES: ${DISCOVERY_INTERVAL_MINUTES:-10}
       BURST_DURATION_MINUTES: ${BURST_DURATION_MINUTES:-5}
@@ -45,6 +46,7 @@ services:
       SCHEDULE_DAYS: ${SCHEDULE_DAYS:-}
       SCHEDULE_START_TIME: ${SCHEDULE_START_TIME:-00:00}
       SCHEDULE_DURATION_MINUTES: ${SCHEDULE_DURATION_MINUTES:-1440}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     restart: unless-stopped
     volumes:
       - ./apps/backend/src:/app:ro
@@ -65,6 +67,7 @@ services:
       DB_NAME: ${DB_NAME:-vrc_monitor}
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      TZ: ${TZ:-Asia/Tokyo}
       SCHEDULE_TYPE: ${SCHEDULE_TYPE:-always}
       SCHEDULE_DAYS: ${SCHEDULE_DAYS:-}
       SCHEDULE_START_TIME: ${SCHEDULE_START_TIME:-00:00}

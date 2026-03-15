@@ -10,10 +10,20 @@ import {
   ReferenceLine,
 } from "recharts";
 import type { Metric } from "@/lib/api";
+import { useChartSettings } from "@/contexts/ChartSettings";
+import { config } from "@/lib/config";
 
 interface QueueChartProps {
   metrics: Metric[];
   capacity: number;
+  height?: number;
+  timezone?: string;
+}
+
+interface ChartPoint {
+  time: string;
+  users: number;
+  queue: number;
 }
 
 interface TooltipPayload {
@@ -51,24 +61,56 @@ function CustomTooltip({ active, label, payload }: CustomTooltipProps) {
   );
 }
 
-export function QueueChart({ metrics, capacity }: QueueChartProps) {
-  const data = metrics.map((m) => ({
-    time: new Date(m.timestamp).toLocaleTimeString("ja-JP", {
+/**
+ * タイムスタンプ文字列をUTCのUnixミリ秒に変換する。
+ * バックエンドがタイムゾーン情報なしで返す場合（"2026-03-15T15:01:00"）も
+ * UTCとして解釈することで、ブラウザのローカルタイム誤解釈を防ぐ。
+ */
+function parseUtcMs(ts: string): number {
+  if (!ts.endsWith("Z") && !/[+\-]\d{2}:\d{2}$/.test(ts)) {
+    return new Date(ts + "Z").getTime();
+  }
+  return new Date(ts).getTime();
+}
+
+function filterByRange(metrics: Metric[], rangeHours: number, timezone: string): ChartPoint[] {
+  const fmt = (ms: number) =>
+    new Date(ms).toLocaleTimeString("ja-JP", {
       hour: "2-digit",
       minute: "2-digit",
-      timeZone: "Asia/Tokyo",
-    }),
+      timeZone: timezone,
+    });
+
+  const filtered =
+    rangeHours <= 0
+      ? metrics
+      : (() => {
+          const latest = metrics[metrics.length - 1];
+          if (!latest) return metrics;
+          const cutoff = parseUtcMs(latest.timestamp) - rangeHours * 60 * 60 * 1000;
+          return metrics.filter((m) => parseUtcMs(m.timestamp) >= cutoff);
+        })();
+
+  return filtered.map((m) => ({
+    time: fmt(parseUtcMs(m.timestamp)),
     users: m.current_users,
     queue: m.queue_size,
   }));
+}
 
-  const maxValue = Math.max(capacity, ...data.map((d) => d.users + d.queue));
+export function QueueChart({ metrics, capacity, height = 180, timezone }: QueueChartProps) {
+  const { rangeHours } = useChartSettings();
+  const tz = timezone ?? config.timezone;
+
+  const data = filterByRange(metrics, rangeHours, tz);
+  const maxValue = Math.max(capacity > 0 ? capacity : 0, ...data.map((d) => d.users + d.queue), 1);
+  const xInterval = Math.max(0, Math.floor(data.length / 8) - 1);
 
   if (data.length === 0) {
     return (
       <div
         style={{
-          height: 160,
+          height,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -82,9 +124,9 @@ export function QueueChart({ metrics, capacity }: QueueChartProps) {
   }
 
   return (
-    <div style={{ height: 180, width: "100%" }}>
+    <div style={{ height, width: "100%" }}>
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
+        <AreaChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id={`ug-${metrics[0]?.instance_id}`} x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor="#3D7EC8" stopOpacity={0.55} />
@@ -100,25 +142,26 @@ export function QueueChart({ metrics, capacity }: QueueChartProps) {
             tick={{ fontSize: 9, fill: "#9A9088" }}
             tickLine={false}
             axisLine={false}
-            interval="preserveStartEnd"
+            interval={xInterval}
           />
           <YAxis
-            domain={[0, maxValue + Math.ceil(maxValue * 0.05)]}
+            domain={[0, maxValue + Math.ceil(maxValue * 0.08)]}
             tick={{ fontSize: 9, fill: "#9A9088" }}
             tickLine={false}
             axisLine={false}
-            width={28}
+            width={32}
+            tickFormatter={(v: number) => String(v)}
           />
           <Tooltip content={<CustomTooltip />} />
-          {/* 定員ライン */}
-          <ReferenceLine
-            y={capacity}
-            stroke="#3D7EC8"
-            strokeDasharray="4 2"
-            strokeWidth={1}
-            opacity={0.4}
-          />
-          {/* 参加者（下層） */}
+          {capacity > 0 && (
+            <ReferenceLine
+              y={capacity}
+              stroke="#3D7EC8"
+              strokeDasharray="4 2"
+              strokeWidth={1}
+              opacity={0.4}
+            />
+          )}
           <Area
             type="monotone"
             dataKey="users"
@@ -130,7 +173,6 @@ export function QueueChart({ metrics, capacity }: QueueChartProps) {
             dot={false}
             activeDot={{ r: 3, fill: "#3D7EC8" }}
           />
-          {/* 待機列（上積み） */}
           <Area
             type="monotone"
             dataKey="queue"

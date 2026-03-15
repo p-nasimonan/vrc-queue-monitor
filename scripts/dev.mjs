@@ -27,6 +27,7 @@ function run(cmd, args, { cwd = ROOT, label, color }) {
         cyan: "\x1b[36m",
         green: "\x1b[32m",
         yellow: "\x1b[33m",
+        magenta: "\x1b[35m",
         reset: "\x1b[0m",
     };
     const prefix = `${colors[color] ?? ""}[${label}]${colors.reset} `;
@@ -67,7 +68,7 @@ async function shutdown() {
     await new Promise((resolve) => {
         const down = spawn(
             "docker",
-            ["compose", "stop", "postgres", "api"],
+            ["compose", "stop", "api", "collector", "postgres"],
             { cwd: ROOT, stdio: "inherit" }
         );
         down.on("close", resolve);
@@ -80,11 +81,11 @@ process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
 // 1. docker compose でバックエンドを起動
-console.log("\x1b[36m[dev] docker compose で postgres と api を起動中...\x1b[0m");
+console.log("\x1b[36m[dev] docker compose で postgres, api, collector を起動中...\x1b[0m");
 await new Promise((resolve) => {
     const up = spawn(
         "docker",
-        ["compose", "up", "-d", "postgres", "api"],
+        ["compose", "up", "-d", "postgres", "api", "collector"],
         { cwd: ROOT, stdio: "inherit" }
     );
     up.on("close", (code) => {
@@ -102,10 +103,18 @@ await new Promise((resolve) => {
 console.log("\x1b[36m[dev] API の起動を待機中 (3秒)...\x1b[0m");
 await new Promise((resolve) => setTimeout(resolve, 3000));
 
-// 3. API ログをストリーム表示
-run("docker", ["compose", "logs", "-f", "--no-log-prefix", "api", "collector"], {
-    label: "backend",
+// 3. API / Collector / PostgreSQL のログを別々にストリーム表示
+run("docker", ["compose", "logs", "-f", "--no-log-prefix", "api"], {
+    label: "api",
     color: "cyan",
+});
+run("docker", ["compose", "logs", "-f", "--no-log-prefix", "collector"], {
+    label: "collector",
+    color: "yellow",
+});
+run("docker", ["compose", "logs", "-f", "--no-log-prefix", "postgres"], {
+    label: "db",
+    color: "magenta",
 });
 
 // 4. Next.js frontend を起動

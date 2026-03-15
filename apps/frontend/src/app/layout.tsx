@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { config } from "@/lib/config";
+import { ChartSettingsProvider } from "@/contexts/ChartSettings";
 
 export const metadata: Metadata = {
   title: config.siteName,
@@ -32,7 +33,9 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <ChartSettingsProvider>{children}</ChartSettingsProvider>
+      </body>
     </html>
   );
 }

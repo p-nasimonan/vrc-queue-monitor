@@ -12,8 +12,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # ---- Development ----
+# ソースは docker-compose の volume mount で渡すため COPY しない
 FROM deps AS development
-COPY src/ ./
 ENV PYTHONUNBUFFERED=1
 CMD ["python", "main.py"]
 
@@ -26,11 +26,14 @@ RUN groupadd -g 1001 appgroup && \
 
 WORKDIR /app
 
-# 依存関係をインストール
+# 依存関係とtzdata（タイムゾーン対応）をインストール
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt && \
-    rm -rf /root/.cache
-
+USER root
+RUN apt-get update && apt-get install -y tzdata && \
+    pip install --no-cache-dir -r requirements.txt && \
+    rm -rf /root/.cache && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+    
 # ソースコード
 COPY --chown=appuser:appgroup src/ ./
 

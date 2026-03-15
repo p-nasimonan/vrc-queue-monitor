@@ -27,12 +27,14 @@ class MetricResponse(BaseModel):
     instance_id: int
     queue_size: int
     current_users: int
+    pc_users: int = 0
 
 
 class InstanceResponse(BaseModel):
     id: int
     location: str
     name: str
+    display_name: Optional[str] = None
     world_name: str
     capacity: int
     world_thumbnail_url: Optional[str] = None
@@ -47,6 +49,7 @@ class InstanceWithMetricsResponse(BaseModel):
     id: int
     location: str
     name: str
+    display_name: Optional[str] = None
     world_name: str
     capacity: int
     world_thumbnail_url: Optional[str] = None
@@ -76,6 +79,7 @@ async def lifespan(app: FastAPI):
     # 起動時
     logger.info("Starting FastAPI server...")
     db.connect()
+    db.run_migrations()
     yield
     # 終了時
     logger.info("Shutting down FastAPI server...")
@@ -108,13 +112,15 @@ def get_schedule_config():
 
 
 def calculate_event_period(date: datetime) -> tuple[datetime, datetime]:
-    """イベント期間を計算"""
+    """イベント期間を計算（JST-aware）"""
+    from zoneinfo import ZoneInfo
+    JST = ZoneInfo("Asia/Tokyo")
+
     config = get_schedule_config()
     start_hour, start_min = map(int, config["start_time"].split(":"))
 
-    start = date.replace(hour=start_hour, minute=start_min, second=0, microsecond=0)
+    start = date.replace(hour=start_hour, minute=start_min, second=0, microsecond=0, tzinfo=JST)
     end = start + timedelta(minutes=config["duration_minutes"])
-    # end の microsecond を 999999 に揃える
     end = end.replace(microsecond=999999)
 
     return start, end
@@ -278,10 +284,16 @@ async def get_event_groups(days: int = Query(30, ge=1, le=90, description="取�
                     m.instance_id,
                     m.queue_size,
                     m.current_users,
+                    m.pc_users,
                     i.location,
                     i.name as instance_name,
+                    i.display_name,
                     i.world_name,
                     i.capacity,
+                    i.world_thumbnail_url,
+                    i.world_image_url,
+                    i.instance_type,
+                    i.region,
                     i.created_at,
                     i.is_active
                 FROM metrics m
@@ -294,9 +306,9 @@ async def get_event_groups(days: int = Query(30, ge=1, le=90, description="取�
             rows = cur.fetchall()
             metrics = [dict(zip(columns, row)) for row in rows]
 
-        # インスタンス情報を取得
+        # インスタンス情報を取得（過去イベントのために非アクティブも含める）
         with db.conn.cursor() as cur:
-            cur.execute("SELECT * FROM instances WHERE is_active = TRUE")
+            cur.execute("SELECT * FROM instances")
             columns = [desc[0] for desc in cur.description]
             rows = cur.fetchall()
             instances = {row[0]: dict(zip(columns, row)) for row in rows}
@@ -319,6 +331,7 @@ async def get_event_groups(days: int = Query(30, ge=1, le=90, description="取�
                 "instance_id": instance_id,
                 "queue_size": metric["queue_size"],
                 "current_users": metric["current_users"],
+                "pc_users": metric.get("pc_users", 0),
             })
 
         # レスポンス構築
@@ -335,8 +348,13 @@ async def get_event_groups(days: int = Query(30, ge=1, le=90, description="取�
                         "id": inst["id"],
                         "location": inst["location"],
                         "name": inst["name"],
+                        "display_name": inst.get("display_name"),
                         "world_name": inst["world_name"],
                         "capacity": inst["capacity"],
+                        "world_thumbnail_url": inst.get("world_thumbnail_url"),
+                        "world_image_url": inst.get("world_image_url"),
+                        "instance_type": inst.get("instance_type"),
+                        "region": inst.get("region"),
                         "created_at": inst["created_at"],
                         "is_active": inst["is_active"],
                         "metrics": sorted(metrics_list, key=lambda x: x["timestamp"]),
@@ -360,7 +378,7 @@ async def get_event_groups(days: int = Query(30, ge=1, le=90, description="取�
 @app.get("/api/metrics", response_model=List[MetricResponse])
 async def get_metrics(
     instance_id: Optional[int] = Query(None, description="インスタンスID"),
-    hours: int = Query(24, ge=1, le=168, description="取得する時間数")
+    hours: int = Query(24, ge=1, le=2160, description="取得する時間数（最大90日）")
 ):
     """メトリクス一覧を取得"""
     if not db.ensure_connected():

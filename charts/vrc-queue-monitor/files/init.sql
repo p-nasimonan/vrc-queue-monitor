@@ -1,6 +1,4 @@
 -- VRC Queue Monitor - Database Schema
--- ※ このファイルは charts/vrc-queue-monitor/files/init.sql が正。
---   Helm は .Files.Get でそちらを参照するため、変更時は両方を更新してください。
 
 -- インスタンスマスタテーブル
 CREATE TABLE IF NOT EXISTS instances (

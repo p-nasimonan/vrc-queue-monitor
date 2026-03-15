@@ -5,6 +5,7 @@ import { css } from "../../styled-system/css";
 import { fetchEventGroups, type EventGroup } from "@/lib/api";
 import { EventSection } from "./EventSection";
 import { Header } from "./Header";
+import { ChartControls } from "./ChartControls";
 import { config } from "@/lib/config";
 
 interface EventListProps {
@@ -57,8 +58,10 @@ export function EventList({ initialEvents, siteName }: EventListProps) {
   return (
     <div className={css({ minH: "100vh", bg: "bg" })}>
       <Header lastUpdated={lastUpdated} siteName={siteName} />
+      <ChartControls />
 
-      <main className={css({ maxW: "1400px", mx: "auto", px: 4, py: 4 })}>
+      {/* モバイルの固定ボトムバー分パディング */}
+      <main className={css({ maxW: "1400px", mx: "auto", px: 4, py: 4, pb: { base: 20, md: 4 } })}>
         {/* ローディングインジケーター */}
         {isLoading && (
           <div
