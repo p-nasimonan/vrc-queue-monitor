@@ -81,15 +81,20 @@ process.on("SIGTERM", shutdown);
 
 // 1. docker compose でバックエンドを起動
 console.log("\x1b[36m[dev] docker compose で postgres と api を起動中...\x1b[0m");
-await new Promise((resolve, reject) => {
+await new Promise((resolve) => {
     const up = spawn(
         "docker",
         ["compose", "up", "-d", "postgres", "api"],
         { cwd: ROOT, stdio: "inherit" }
     );
     up.on("close", (code) => {
-        if (code === 0) resolve();
-        else reject(new Error(`docker compose up が失敗しました (exit code: ${code})`));
+        if (code === 0) {
+            resolve();
+        } else {
+            console.error(`\n\x1b[31m[Error] docker compose up が失敗しました (exit code: ${code})\x1b[0m`);
+            console.error(`\x1b[33m💡 ヒント: ポートの競合（例: 5433や8000など）が発生しているか、Docker Desktopが起動していない可能性があります。\x1b[0m`);
+            process.exit(1);
+        }
     });
 });
 
