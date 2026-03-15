@@ -1,7 +1,7 @@
 @layer reset, base, tokens, recipes, utilities;
 
 html {
-  font-family: 'Noto Sans JP', system-ui, sans-serif;
+  font-family: var(--font-noto-sans-jp), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

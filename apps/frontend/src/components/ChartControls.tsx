@@ -13,7 +13,7 @@ const RANGES: { value: number; label: string }[] = [
 ];
 
 export function ChartControls() {
-  const { rangeHours, setRangeHours } = useChartSettings();
+  const { rangeHours, setRangeHours, offsetSteps, setOffsetSteps } = useChartSettings();
 
   return (
     <div
@@ -84,16 +84,57 @@ export function ChartControls() {
             );
           })}
         </div>
-        <span
-          className={css({
-            fontSize: "2xs",
-            color: "text.muted",
-            ml: 2,
-            display: { base: "none", sm: "inline" },
-          })}
-        >
-          すべてのチャートに適用
-        </span>
+
+        {/* 範囲選択時のみ表示: 時間窓を前後にずらす */}
+        {rangeHours > 0 && (
+          <div className={css({ display: "flex", alignItems: "center", gap: 1, ml: 2 })}>
+            <button
+              onClick={() => setOffsetSteps(offsetSteps + 1)}
+              title="前の時間帯"
+              className={css({
+                px: 2,
+                py: { base: 2, md: 1 },
+                borderRadius: "md",
+                fontSize: { base: "sm", md: "xs" },
+                fontWeight: "700",
+                border: "1px solid",
+                borderColor: "border",
+                bg: "bg.subtle",
+                color: "text.muted",
+                cursor: "pointer",
+                _hover: { bg: "bg.hover", color: "text" },
+              })}
+            >
+              ◀
+            </button>
+            {offsetSteps > 0 && (
+              <span className={css({ fontSize: "xs", color: "text.muted", minW: "3ch", textAlign: "center" })}>
+                -{offsetSteps}
+              </span>
+            )}
+            <button
+              onClick={() => setOffsetSteps(Math.max(0, offsetSteps - 1))}
+              disabled={offsetSteps === 0}
+              title="新しい時間帯"
+              className={css({
+                px: 2,
+                py: { base: 2, md: 1 },
+                borderRadius: "md",
+                fontSize: { base: "sm", md: "xs" },
+                fontWeight: "700",
+                border: "1px solid",
+                borderColor: "border",
+                bg: "bg.subtle",
+                color: offsetSteps === 0 ? "text.subtle" : "text.muted",
+                cursor: offsetSteps === 0 ? "not-allowed" : "pointer",
+                opacity: offsetSteps === 0 ? 0.4 : 1,
+                _hover: offsetSteps === 0 ? {} : { bg: "bg.hover", color: "text" },
+              })}
+            >
+              ▶
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

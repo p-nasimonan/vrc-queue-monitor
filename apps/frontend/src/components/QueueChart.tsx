@@ -79,7 +79,7 @@ function parseUtcMs(ts: string): number {
   return new Date(ts).getTime();
 }
 
-function filterByRange(metrics: Metric[], rangeHours: number, timezone: string): ChartPoint[] {
+function filterByRange(metrics: Metric[], rangeHours: number, offsetSteps: number, timezone: string): ChartPoint[] {
   const fmt = (ms: number) =>
     new Date(ms).toLocaleTimeString("ja-JP", {
       hour: "2-digit",
@@ -93,8 +93,13 @@ function filterByRange(metrics: Metric[], rangeHours: number, timezone: string):
       : (() => {
           const latest = metrics[metrics.length - 1];
           if (!latest) return metrics;
-          const cutoff = parseUtcMs(latest.timestamp) - rangeHours * 60 * 60 * 1000;
-          return metrics.filter((m) => parseUtcMs(m.timestamp) >= cutoff);
+          const rangeMs = rangeHours * 60 * 60 * 1000;
+          const windowEnd = parseUtcMs(latest.timestamp) - offsetSteps * rangeMs;
+          const windowStart = windowEnd - rangeMs;
+          return metrics.filter((m) => {
+            const ts = parseUtcMs(m.timestamp);
+            return ts >= windowStart && ts <= windowEnd;
+          });
         })();
 
   return filtered.map((m) => ({
@@ -105,31 +110,31 @@ function filterByRange(metrics: Metric[], rangeHours: number, timezone: string):
 }
 
 export function QueueChart({ metrics, capacity, height = 180, timezone }: QueueChartProps) {
-  const { rangeHours } = useChartSettings();
+  const { rangeHours, offsetSteps } = useChartSettings();
   const tz = timezone ?? config.timezone;
 
-  const data = filterByRange(metrics, rangeHours, tz);
+  const data = filterByRange(metrics, rangeHours, offsetSteps, tz);
   const maxValue = Math.max(capacity > 0 ? capacity : 0, ...data.map((d) => d.users + d.queue), 1);
   const xInterval = Math.max(0, Math.floor(data.length / 8) - 1);
 
   if (data.length === 0) {
     return (
       <div
-        style={{
-          height,
+        className={css({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          color: "#9A9088",
-          fontSize: "13px",
-        }}
+          color: "text.muted",
+          fontSize: "sm",
+        })}
+        style={{ height }}
       >
         データなし
       </div>
     );
   }
 
-  return (
+  const chartInner = (
     <div style={{ height, width: "100%" }}>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
@@ -194,4 +199,6 @@ export function QueueChart({ metrics, capacity, height = 180, timezone }: QueueC
       </ResponsiveContainer>
     </div>
   );
+
+  return chartInner;
 }

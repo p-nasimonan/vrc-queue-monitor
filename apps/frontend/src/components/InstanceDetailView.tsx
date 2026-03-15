@@ -13,7 +13,11 @@ interface InstanceDetailViewProps {
 }
 
 export function InstanceDetailView({ instance, metrics }: InstanceDetailViewProps) {
-  const latestMetric = metrics[metrics.length - 1];
+  // APIは timestamp DESC で返すため昇順に並び替え（チャートの時間軸を左→右に）
+  const sortedMetrics = [...metrics].sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  );
+  const latestMetric = sortedMetrics[sortedMetrics.length - 1];
   const currentUsers = latestMetric?.current_users ?? 0;
   const queueSize = latestMetric?.queue_size ?? 0;
   const pcUsers = latestMetric?.pc_users;
@@ -71,9 +75,9 @@ export function InstanceDetailView({ instance, metrics }: InstanceDetailViewProp
             mb: 4,
           })}
         >
-          {/* サムネイル */}
+          {/* サムネイル (カードと同サイズ 200×150) */}
           {instance.world_thumbnail_url && (
-            <div className={css({ position: "relative", width: "100%", aspectRatio: "16/9", bg: "bg.subtle" })}>
+            <div className={css({ position: "relative", width: "200px", height: "150px", bg: "bg.subtle", flexShrink: 0 })}>
               <Image
                 src={instance.world_thumbnail_url}
                 alt={instance.world_name}
@@ -85,7 +89,7 @@ export function InstanceDetailView({ instance, metrics }: InstanceDetailViewProp
           )}
 
           <div className={css({ p: 4, display: "flex", flexWrap: "wrap", gap: 4, alignItems: "flex-start" })}>
-            <div className={css({ flex: 1, minW: "200px" })}>
+            <div className={css({ flex: 1, minW: "160px" })}>
               {instance.display_name && (
                 <h2 className={css({ fontSize: "xl", fontWeight: "700", color: "text", mb: 1 })}>
                   {instance.display_name}
@@ -144,17 +148,17 @@ export function InstanceDetailView({ instance, metrics }: InstanceDetailViewProp
         >
           <div className={css({ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 })}>
             <h3 className={css({ fontSize: "md", fontWeight: "700", color: "text" })}>履歴チャート</h3>
-            {metrics.length > 0 && (
+            {sortedMetrics.length > 0 && (
               <span className={css({ fontSize: "xs", color: "text.muted" })}>
-                {formatTs(metrics[0].timestamp)} 〜 {formatTs(metrics[metrics.length - 1].timestamp)}
+                {formatTs(sortedMetrics[0].timestamp)} 〜 {formatTs(sortedMetrics[sortedMetrics.length - 1].timestamp)}
               </span>
             )}
           </div>
-          <QueueChart metrics={metrics} capacity={instance.capacity} height={400} />
+          <QueueChart metrics={sortedMetrics} capacity={instance.capacity} height={400} scrollable />
         </div>
 
         <p className={css({ fontSize: "xs", color: "text.muted", mt: 3, textAlign: "right" })}>
-          {metrics.length} データポイント
+          {sortedMetrics.length} データポイント
         </p>
       </main>
 
