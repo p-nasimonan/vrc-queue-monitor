@@ -38,12 +38,12 @@ def discover_instances(api: VRChatAPI, db: Database, group_id: str):
 
             name = inst.get("name", "Unknown")
             world = inst.get("world", {})
-            world_name = world.get("name", "Unknown")
+            world_name = world.get("name", "Unknown") if isinstance(world, dict) else getattr(world, "name", "Unknown")
             capacity = inst.get("capacity", 0)
 
             # ワールド情報を抽出
-            world_thumbnail_url = world.get("thumbnailImageUrl")
-            world_image_url = world.get("imageUrl")
+            world_thumbnail_url = world.get("thumbnailImageUrl") if isinstance(world, dict) else getattr(world, "thumbnail_image_url", getattr(world, "thumbnailImageUrl", None))
+            world_image_url = world.get("imageUrl") if isinstance(world, dict) else getattr(world, "image_url", getattr(world, "imageUrl", None))
 
             # インスタンスタイプとリージョンを抽出
             instance_type = inst.get("type", "unknown")
@@ -100,11 +100,18 @@ def collect_metrics(api: VRChatAPI, db: Database, schedule_config: ScheduleConfi
                 continue
 
             # メトリクスをDBに保存
-            queue_enabled = detail.get("queueEnabled", False)
-            queue_size = detail.get("queueSize", 0) if queue_enabled else 0
+            queue_enabled = detail.get("queueEnabled") if "queueEnabled" in detail else detail.get("queue_enabled", False)
+            queue_size = detail.get("queueSize") if "queueSize" in detail else detail.get("queue_size", 0)
+            
+            # None対策
+            if queue_size is None:
+                queue_size = 0
+            if queue_enabled is None:
+                queue_enabled = False
+
             current_users = detail.get("n_users", 0)
 
-            if db.insert_metric(inst["id"], queue_size, current_users):
+            if db.insert_metric(inst["id"], queue_size if queue_enabled else 0, current_users):
                 saved_count += 1
 
             # Rate Limit対策

@@ -145,12 +145,28 @@ class VRChatAPI:
         """インスタンスの詳細情報（queueSize含む）を取得"""
         try:
             instance = self.instances_api.get_instance(world_id, instance_id)
+            # vrchatapi SDK の Instance オブジェクトから安全に値を取得
+            # to_dict() するとスネークケースになるフィールドがあるため両方チェックする
             instance_dict = instance.to_dict()
+            
+            queue_enabled = instance.queue_enabled if hasattr(instance, 'queue_enabled') else instance_dict.get('queueEnabled', instance_dict.get('queue_enabled'))
+            queue_size = instance.queue_size if hasattr(instance, 'queue_size') else instance_dict.get('queueSize', instance_dict.get('queue_size'))
+            n_users = instance.n_users if hasattr(instance, 'n_users') else instance_dict.get('n_users', 0)
+            
+            name = instance.name if hasattr(instance, 'name') and instance.name else instance.instance_id if hasattr(instance, 'instance_id') else instance_dict.get("name", instance_dict.get("instance_id"))
+
             # デバッグ: 主要フィールドを確認
-            logger.debug(f"Fetched {instance_dict.get('name')}: "
-                        f"n_users={instance_dict.get('n_users')}, "
-                        f"queueEnabled={instance_dict.get('queueEnabled')}, "
-                        f"queueSize={instance_dict.get('queueSize')}")
+            logger.debug(f"Fetched {name}: "
+                        f"n_users={n_users}, "
+                        f"queueEnabled={queue_enabled}, "
+                        f"queueSize={queue_size}")
+            
+            # 取得した値を辞書にセットし直しておく（呼び出し元で使いやすくするため）
+            instance_dict["name"] = name
+            instance_dict["queue_enabled"] = queue_enabled
+            instance_dict["queue_size"] = queue_size
+            instance_dict["n_users"] = n_users
+            
             return instance_dict
 
         except UnauthorizedException as e:
