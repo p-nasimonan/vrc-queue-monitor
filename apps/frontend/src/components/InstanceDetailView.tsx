@@ -154,7 +154,7 @@ export function InstanceDetailView({ instance, metrics }: InstanceDetailViewProp
               </span>
             )}
           </div>
-          <QueueChart metrics={sortedMetrics} capacity={instance.capacity} height={400} scrollable />
+          <QueueChart metrics={sortedMetrics} capacity={instance.capacity} height={400} />
         </div>
 
         <p className={css({ fontSize: "xs", color: "text.muted", mt: 3, textAlign: "right" })}>
