@@ -18,9 +18,19 @@ data:
         name TEXT NOT NULL,
         world_name TEXT NOT NULL,
         capacity SMALLINT NOT NULL DEFAULT 0,
+        world_thumbnail_url TEXT,
+        world_image_url TEXT,
+        instance_type TEXT,
+        region TEXT,
         created_at TIMESTAMP NOT NULL DEFAULT NOW(),
         is_active BOOLEAN NOT NULL DEFAULT TRUE
     );
+
+    -- 既存テーブルへのカラム追加（すでにテーブルが存在していた場合用）
+    ALTER TABLE instances ADD COLUMN IF NOT EXISTS world_thumbnail_url TEXT;
+    ALTER TABLE instances ADD COLUMN IF NOT EXISTS world_image_url TEXT;
+    ALTER TABLE instances ADD COLUMN IF NOT EXISTS instance_type TEXT;
+    ALTER TABLE instances ADD COLUMN IF NOT EXISTS region TEXT;
 
     -- 時系列メトリクステーブル
     CREATE TABLE IF NOT EXISTS metrics (
