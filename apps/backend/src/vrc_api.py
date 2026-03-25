@@ -156,7 +156,8 @@ class VRChatAPI:
             queue_size = instance.queue_size if hasattr(instance, 'queue_size') else instance_dict.get('queueSize', instance_dict.get('queue_size'))
             
             # n_users と user_count (SDKの仕様揺れ対策)
-            n_users = getattr(instance, 'n_users', getattr(instance, 'user_count', instance_dict.get('n_users', instance_dict.get('userCount', 0))))
+            n_users = getattr(instance, 'n_users', getattr(instance, 'user_count', instance_dict.get('n_users', 0)))
+            user_count = getattr(instance, 'user_count', instance_dict.get('user_count', instance_dict.get('userCount')))
             
             # name と capacity
             capacity = getattr(instance, 'capacity', instance_dict.get('capacity', 0))
@@ -165,6 +166,7 @@ class VRChatAPI:
             # デバッグ: 主要フィールドを確認
             logger.debug(f"Fetched {name}: "
                         f"n_users={n_users}, "
+                        f"user_count={user_count}, "
                         f"queueEnabled={queue_enabled}, "
                         f"queueSize={queue_size}")
             
@@ -173,6 +175,8 @@ class VRChatAPI:
             instance_dict["queue_enabled"] = queue_enabled
             instance_dict["queue_size"] = queue_size
             instance_dict["n_users"] = n_users
+            if user_count is not None:
+                instance_dict["user_count"] = user_count
             
             return instance_dict
 

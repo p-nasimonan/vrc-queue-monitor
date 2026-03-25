@@ -119,7 +119,14 @@ def collect_metrics(api: VRChatAPI, db: Database, schedule_config: ScheduleConfi
                 queue_enabled = False
             queue_size = detail.get("queue_size", 0) or 0
 
-            current_users = detail.get("n_users", 0) or 0
+            n_users = detail.get("n_users", 0) or 0
+            user_count = detail.get("user_count")
+            
+            if user_count is not None:
+                current_users = user_count
+                # APIの情報を尊重し、loading/ghostユーザーによる差分をキューとして計算しない
+            else:
+                current_users = n_users
 
             # プラットフォーム別ユーザー数
             platforms = detail.get("platforms") or {}
