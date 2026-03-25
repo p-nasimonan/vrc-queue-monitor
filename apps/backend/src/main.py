@@ -120,13 +120,15 @@ def collect_metrics(api: VRChatAPI, db: Database, schedule_config: ScheduleConfi
             queue_size = detail.get("queue_size", 0) or 0
 
             n_users = detail.get("n_users", 0) or 0
-            user_count = detail.get("user_count")
+            # user_count はローディング中のズレがあるため、ユーザーの要望通り「最大定員 (capacity)」を基準にする
             
-            if user_count is not None:
-                current_users = user_count
-                # APIの情報を尊重し、loading/ghostユーザーによる差分をキューとして計算しない
+            if capacity > 0 and n_users > capacity:
+                # 最大定員を超えている分を「待機列」として処理する
+                queue_size = n_users - capacity
+                current_users = capacity
             else:
                 current_users = n_users
+                queue_size = 0
 
             # プラットフォーム別ユーザー数
             platforms = detail.get("platforms") or {}
