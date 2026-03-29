@@ -4,6 +4,8 @@ import { css, cx } from "../../styled-system/css";
 import { ThemeToggle } from "./ThemeToggle";
 import { config } from "@/lib/config";
 import { ConfigPanel } from "./ConfigPanel";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 interface HeaderProps {
   lastUpdated?: Date | null;
@@ -11,6 +13,8 @@ interface HeaderProps {
 }
 
 export function Header({ lastUpdated, siteName }: HeaderProps) {
+  const pathname = usePathname();
+
   return (
     <header
       className={css({
@@ -30,23 +34,58 @@ export function Header({ lastUpdated, siteName }: HeaderProps) {
           justifyContent: "space-between",
         })}
       >
-        <div>
-          <h1
-            className={css({
-              fontSize: "xl",
-              fontWeight: "700",
-              color: "text",
-              fontFamily: "heading",
-              letterSpacing: "tight",
-            })}
-          >
-            🐾 {siteName}
-          </h1>
-          {lastUpdated && (
-            <p className={css({ fontSize: "xs", color: "text.muted", mt: "1px" })}>
-              最終更新: {lastUpdated.toLocaleString("ja-JP")}
-            </p>
-          )}
+        <div className={css({ display: "flex", alignItems: "center", gap: 6 })}>
+          <div>
+            <h1
+              className={css({
+                fontSize: "xl",
+                fontWeight: "700",
+                color: "text",
+                fontFamily: "heading",
+                letterSpacing: "tight",
+              })}
+            >
+              🐾 {siteName}
+            </h1>
+            {lastUpdated && (
+              <p className={css({ fontSize: "xs", color: "text.muted", mt: "1px" })}>
+                最終更新: {lastUpdated.toLocaleString("ja-JP")}
+              </p>
+            )}
+          </div>
+
+          <nav className={css({ display: "flex", gap: 4, ml: 4 })}>
+            <Link 
+              href="/" 
+              className={css({
+                fontSize: "sm",
+                fontWeight: "600",
+                color: pathname === "/" ? "accent" : "text.muted",
+                borderBottom: pathname === "/" ? "2px solid" : "2px solid transparent",
+                borderColor: pathname === "/" ? "accent" : "transparent",
+                pb: 1,
+                transition: "all 0.2s",
+                _hover: { color: "text" },
+              })}
+            >
+              グラフ表示
+            </Link>
+            <Link 
+              href="/table" 
+              className={css({
+                fontSize: "sm",
+                fontWeight: "600",
+                color: pathname === "/table" ? "accent" : "text.muted",
+                borderBottom: pathname === "/table" ? "2px solid" : "2px solid transparent",
+                borderColor: pathname === "/table" ? "accent" : "transparent",
+                pb: 1,
+                transition: "all 0.2s",
+                _hover: { color: "text" },
+              })}
+            >
+              表表示
+            </Link>
+          </nav>
         </div>
 
         <div className={css({ display: "flex", alignItems: "center", gap: 3 })}>

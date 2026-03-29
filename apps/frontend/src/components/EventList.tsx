@@ -43,18 +43,7 @@ export function EventList({ initialEvents, siteName }: EventListProps) {
     return () => clearInterval(interval);
   }, [refreshEvents]);
 
-  // nowがnull（SSR）の場合は何もレンダリングしない
-  const liveEvents = now
-    ? events.filter((e) => {
-      const start = new Date(e.startTime);
-      const end = new Date(e.endTime);
-      return now >= start && now <= end;
-    })
-    : [];
-  const pastEvents = now
-    ? events.filter((e) => now > new Date(e.endTime))
-    : [];
-
+  // nowがnull（SSR）の場合はイベント展開のみ行う
   return (
     <div className={css({ minH: "100vh", bg: "bg" })}>
       <Header lastUpdated={lastUpdated} siteName={siteName} />
@@ -97,63 +86,52 @@ export function EventList({ initialEvents, siteName }: EventListProps) {
             </p>
           </div>
         ) : (
-          <>
-            {/* 進行中 */}
-            {liveEvents.length > 0 && (
-              <div className={css({ mb: 6 })}>
-                <div className={css({ display: "flex", alignItems: "center", gap: 2, mb: 3 })}>
-                  <span
-                    className={css({
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 1,
-                      px: 2,
-                      py: "2px",
-                      borderRadius: "full",
-                      fontSize: "xs",
-                      fontWeight: "700",
-                      bg: "vrc.success",
-                      color: "white",
-                    })}
-                  >
-                    <span
-                      className={css({
-                        w: "5px",
-                        h: "5px",
-                        borderRadius: "full",
-                        bg: "white",
-                        display: "inline-block",
-                      })}
-                    />
-                    LIVE
-                  </span>
-                  <h2 className={css({ fontSize: "lg", fontWeight: "700", color: "text" })}>
-                    進行中のイベント
-                  </h2>
-                </div>
-                {liveEvents.map((event) => (
-                  <EventSection key={event.eventDate} event={event} defaultOpen isLive />
-                ))}
-              </div>
-            )}
+          <div className={css({ display: "flex", flexDirection: "column", gap: 3 })}>
+            {events.map((event, index) => {
+              const start = new Date(event.startTime);
+              const end = new Date(event.endTime);
+              const isLive = now ? now >= start && now <= end : false;
 
-            {/* 過去のイベント */}
-            {pastEvents.length > 0 && (
-              <div>
-                <h2 className={css({ fontSize: "lg", fontWeight: "700", color: "text", mb: 3 })}>
-                  過去のイベント
-                </h2>
-                {pastEvents.map((event, index) => (
-                  <EventSection
-                    key={event.eventDate}
-                    event={event}
-                    defaultOpen={index === 0 && liveEvents.length === 0}
-                    isLive={false}
+              return (
+                <div key={event.eventDate} className={css({ position: "relative" })}>
+                  {isLive && (
+                    <div className={css({ display: "flex", alignItems: "center", gap: 2, mb: 3 })}>
+                      <span
+                        className={css({
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 1,
+                          px: 2,
+                          py: "2px",
+                          borderRadius: "full",
+                          fontSize: "xs",
+                          fontWeight: "700",
+                          bg: "vrc.success",
+                          color: "white",
+                        })}
+                      >
+                        <span
+                          className={css({
+                            w: "5px",
+                            h: "5px",
+                            borderRadius: "full",
+                            bg: "white",
+                            display: "inline-block",
+                          })}
+                        />
+                        LIVE
+                      </span>
+                    </div>
+                  )}
+                  <EventSection 
+                    event={event} 
+                    defaultOpen={index === 0} 
+                    isLive={isLive} 
                   />
-                ))}
-              </div>
-            )}
-          </>
+                </div>
+              );
+            })}
+          </div>
         )}
       </main>
     </div>
