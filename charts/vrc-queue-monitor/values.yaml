@@ -11,6 +11,7 @@ frontend:
   replicaCount: 1
   image:
     name: frontend  # registry/repository/name:tag
+    tag: ""        # 未設定時は image.tag を使用
   resources:
     requests:
       cpu: 100m
@@ -38,6 +39,7 @@ backendApi:
   replicaCount: 1
   image:
     name: backend
+    tag: ""        # 未設定時は image.tag を使用
   command: ["python", "api.py"]
   resources:
     requests:
@@ -65,6 +67,7 @@ backendCollector:
   enabled: true
   image:
     name: backend
+    tag: ""        # 未設定時は image.tag を使用
   command: ["python", "main.py"]
   resources:
     requests:

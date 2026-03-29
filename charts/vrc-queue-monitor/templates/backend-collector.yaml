@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: backend-collector
-          image: {{ include "vrc-queue-monitor.image" (dict "root" . "name" .Values.backendCollector.image.name) }}
+          image: {{ include "vrc-queue-monitor.image" (dict "root" . "name" .Values.backendCollector.image.name "tag" .Values.backendCollector.image.tag) }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: {{ toJson .Values.backendCollector.command }}
           envFrom:

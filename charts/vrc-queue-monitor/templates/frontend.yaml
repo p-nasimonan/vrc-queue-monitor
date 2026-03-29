@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: {{ include "vrc-queue-monitor.image" (dict "root" . "name" .Values.frontend.image.name) }}
+          image: {{ include "vrc-queue-monitor.image" (dict "root" . "name" .Values.frontend.image.name "tag" .Values.frontend.image.tag) }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - containerPort: {{ .Values.frontend.service.port }}
