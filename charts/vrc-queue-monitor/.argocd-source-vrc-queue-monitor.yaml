@@ -7,7 +7,7 @@ helm:
     value: sha-28df0c2
     forcestring: true
   - name: frontend.image.tag
-    value: sha-5a57b0b
+    value: sha-eaba4f2
     forcestring: true
   - name: backendApi.image.tag
     value: sha-28df0c2
