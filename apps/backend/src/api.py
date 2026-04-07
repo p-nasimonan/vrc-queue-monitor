@@ -82,7 +82,8 @@ async def lifespan(app: FastAPI):
     # 起動時
     logger.info("Starting FastAPI server...")
     db.connect()
-    db.run_migrations()
+    if not db.run_migrations():
+        logger.warning("Skipping migrations on API startup due to timeout/error; continuing startup")
     yield
     # 終了時
     logger.info("Shutting down FastAPI server...")

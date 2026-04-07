@@ -78,6 +78,9 @@ class Database:
 
         try:
             with self.conn.cursor() as cur:
+                # 起動時のDDLロック待ちで無限にハングしないように制限する
+                cur.execute("SET LOCAL lock_timeout = '5s'")
+                cur.execute("SET LOCAL statement_timeout = '30s'")
                 for sql in migrations:
                     cur.execute(sql)
             self.conn.commit()
