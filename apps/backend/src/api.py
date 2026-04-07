@@ -3,12 +3,13 @@
 import os
 import logging
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ConfigDict
+from zoneinfo import ZoneInfo
 
 from db import Database
 from scheduler import ScheduleConfig
@@ -19,6 +20,8 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+JST = ZoneInfo("Asia/Tokyo")
 
 
 # Pydanticモデル定義
@@ -113,9 +116,6 @@ def get_schedule_config():
 
 def calculate_event_period(date: datetime) -> tuple[datetime, datetime]:
     """イベント期間を計算（JST-aware）"""
-    from zoneinfo import ZoneInfo
-    JST = ZoneInfo("Asia/Tokyo")
-
     config = get_schedule_config()
     start_hour, start_min = map(int, config["start_time"].split(":"))
 
@@ -131,7 +131,10 @@ def get_event_key(timestamp: datetime) -> str:
     config = get_schedule_config()
     start_hour = int(config["start_time"].split(":")[0])
 
-    event_date = timestamp
+    # DBのTIMESTAMPはUTCとして読み出されるため、イベント日判定はJSTで行う
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=timezone.utc)
+    event_date = timestamp.astimezone(JST)
     if event_date.hour < start_hour:
         event_date -= timedelta(days=1)
 
@@ -140,9 +143,6 @@ def get_event_key(timestamp: datetime) -> str:
 
 def _calculate_next_start() -> Optional[datetime]:
     """次回収集開始時刻を計算（JST）"""
-    from zoneinfo import ZoneInfo
-    JST = ZoneInfo("Asia/Tokyo")
-
     schedule_type = os.getenv("SCHEDULE_TYPE", "always")
     schedule_days_str = os.getenv("SCHEDULE_DAYS", "")
     start_time_str = os.getenv("SCHEDULE_START_TIME", "00:00")

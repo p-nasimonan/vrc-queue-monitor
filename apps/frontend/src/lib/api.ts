@@ -2,20 +2,86 @@
  * Backend API Client
  */
 
-/**
- * サーバーサイド（RSC/SSR）は BACKEND_API_URL を直接使用。
- * クライアントサイドは相対パス /api/... を使用し、
- * src/app/api/[...path]/route.ts の Route Handler が実行時にプロキシする。
- * （rewrites() はビルド時評価のため k8s では BACKEND_API_URL を読めない）
- */
-const getApiBase = (): string => {
-  if (typeof window === "undefined") {
-    // サーバーサイド: 環境変数からバックエンド URL を直接参照
-    return process.env.BACKEND_API_URL || "http://localhost:8000";
-  }
-  // クライアントサイド: 相対パス（Route Handler がバックエンドにプロキシ）
-  return "";
+type NetworkErrorLike = Error & {
+  cause?: {
+    code?: string;
+  };
 };
+
+const RETRYABLE_DNS_CODES = new Set(["EAI_AGAIN", "ENOTFOUND", "ECONNREFUSED", "ETIMEDOUT"]);
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const isRetryableNetworkError = (error: unknown): boolean => {
+  const code = (error as NetworkErrorLike | undefined)?.cause?.code;
+  return typeof code === "string" && RETRYABLE_DNS_CODES.has(code);
+};
+
+const normalizeBaseUrl = (url: string): string => url.replace(/\/+$/, "");
+
+const getServerApiBases = (): string[] => {
+  const configured = process.env.BACKEND_API_URL;
+  const namespace = process.env.POD_NAMESPACE;
+  const candidates: string[] = [];
+
+  if (configured) {
+    candidates.push(normalizeBaseUrl(configured));
+
+    // k8s短縮名が不安定な環境向けにFQDN候補を追加
+    if (namespace) {
+      try {
+        const parsed = new URL(configured);
+        if (!parsed.hostname.includes(".svc.")) {
+          const hostWithNs = `${parsed.hostname}.${namespace}.svc.cluster.local`;
+          const port = parsed.port ? `:${parsed.port}` : "";
+          candidates.push(`${parsed.protocol}//${hostWithNs}${port}`);
+        }
+      } catch {
+        // invalid BACKEND_API_URL は既存候補のみで処理
+      }
+    }
+  }
+
+  candidates.push("http://api:8000", "http://localhost:8000");
+
+  return [...new Set(candidates)];
+};
+
+const fetchWithServerFallback = async (path: string): Promise<Response> => {
+  const bases = getServerApiBases();
+  let lastError: unknown = new Error("No API base candidates available");
+
+  for (const base of bases) {
+    const url = `${base}${path}`;
+
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        return await fetch(url, { cache: "no-store" });
+      } catch (error) {
+        lastError = error;
+        if (!isRetryableNetworkError(error) || attempt === 2) {
+          break;
+        }
+        await wait(300 * attempt);
+      }
+    }
+  }
+
+  throw lastError;
+};
+
+const fetchApi = async (path: string): Promise<Response> => {
+  if (typeof window === "undefined") {
+    return fetchWithServerFallback(path);
+  }
+  return fetch(path, { cache: "no-store" });
+};
+
+/**
+ * クライアント・サーバーともに /api/... の相対パスを利用する。
+ * サーバーサイドのみ、名前解決失敗時に BACKEND_API_URL とフォールバック候補で再試行する。
+ * 実際のバックエンド中継は src/app/api/[...path]/route.ts が担当する。
+ */
 
 // 型定義
 export interface Instance {
@@ -192,9 +258,7 @@ export async function fetchEventGroups(days: number = 30): Promise<EventGroup[]>
   }
 
   try {
-    const res = await fetch(`${getApiBase()}/api/event-groups?days=${days}`, {
-      cache: "no-store",
-    });
+    const res = await fetchApi(`/api/event-groups?days=${days}`);
 
     if (!res.ok) {
       throw new Error(`API error: ${res.status}`);
@@ -208,7 +272,7 @@ export async function fetchEventGroups(days: number = 30): Promise<EventGroup[]>
 }
 
 export async function fetchInstance(instanceId: number): Promise<Instance> {
-  const res = await fetch(`${getApiBase()}/api/instances/${instanceId}`, { cache: "no-store" });
+  const res = await fetchApi(`/api/instances/${instanceId}`);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
   return await res.json();
 }
@@ -219,9 +283,7 @@ export async function fetchInstances(activeOnly: boolean = true): Promise<Instan
   }
 
   try {
-    const res = await fetch(`${getApiBase()}/api/instances?active_only=${activeOnly}`, {
-      cache: "no-store",
-    });
+    const res = await fetchApi(`/api/instances?active_only=${activeOnly}`);
 
     if (!res.ok) {
       throw new Error(`API error: ${res.status}`);
@@ -240,12 +302,12 @@ export async function fetchMetrics(instanceId?: number, hours: number = 24): Pro
   }
 
   try {
-    let url = `${getApiBase()}/api/metrics?hours=${hours}`;
+    let url = `/api/metrics?hours=${hours}`;
     if (instanceId) {
       url += `&instance_id=${instanceId}`;
     }
 
-    const res = await fetch(url, { cache: "no-store" });
+    const res = await fetchApi(url);
 
     if (!res.ok) {
       throw new Error(`API error: ${res.status}`);
@@ -264,7 +326,7 @@ export async function checkApiHealth(): Promise<boolean> {
   }
 
   try {
-    const res = await fetch(`${getApiBase()}/api/config`, { cache: "no-store" });
+    const res = await fetchApi(`/api/config`);
     return res.ok;
   } catch {
     return false;
@@ -290,7 +352,7 @@ export async function fetchConfig(): Promise<MonitorConfig> {
   }
 
   try {
-    const res = await fetch(`${getApiBase()}/api/config`, { cache: "no-store" });
+    const res = await fetchApi(`/api/config`);
     if (!res.ok) {
       throw new Error(`API error: ${res.status}`);
     }

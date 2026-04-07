@@ -121,6 +121,7 @@ def collect_metrics(api: VRChatAPI, db: Database, schedule_config: ScheduleConfi
 
             n_users = detail.get("n_users", 0) or 0
             # user_count はローディング中のズレがあるため、ユーザーの要望通り「最大定員 (capacity)」を基準にする
+            capacity = detail.get("capacity", 0) or 0
             
             if capacity > 0 and n_users > capacity:
                 # 最大定員を超えている分を「待機列」として処理する
@@ -135,7 +136,6 @@ def collect_metrics(api: VRChatAPI, db: Database, schedule_config: ScheduleConfi
             pc_users = platforms.get("standalonewindows", 0) or 0
 
             # インスタンス情報をdetailで更新（capacityなども正しい値で上書き）
-            capacity = detail.get("capacity", 0) or 0
             display_name = detail.get("display_name") or detail.get("displayName") or None
             world = detail.get("world") or {}
             world_name = world.get("name", inst["world_name"]) if isinstance(world, dict) else inst["world_name"]

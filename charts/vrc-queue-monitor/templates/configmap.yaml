@@ -13,7 +13,7 @@ data:
   {{- end }}
   ## バックエンドAPIのURLを自動生成（サーバーサイド環境変数）
   {{- if not (hasKey .Values.frontend.config "BACKEND_API_URL") }}
-  BACKEND_API_URL: "http://{{ .Release.Name }}-backend-api:{{ .Values.backendApi.service.port }}"
+  BACKEND_API_URL: "http://{{ .Release.Name }}-backend-api.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.backendApi.service.port }}"
   {{- end }}
 {{- end }}
 ---
