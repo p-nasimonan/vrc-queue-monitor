@@ -18,6 +18,7 @@ export function EventList({ initialEvents, siteName }: EventListProps) {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [now, setNow] = useState<Date | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   useEffect(() => {
     setLastUpdated(new Date());
@@ -31,7 +32,10 @@ export function EventList({ initialEvents, siteName }: EventListProps) {
       setEvents(data);
       setLastUpdated(new Date());
       setNow(new Date());
+      setApiError(null);
     } catch (error) {
+      const msg = error instanceof Error ? error.message : "バックエンドに接続できません";
+      setApiError(msg);
       console.error("Failed to fetch events:", error);
     } finally {
       setIsLoading(false);
@@ -51,7 +55,7 @@ export function EventList({ initialEvents, siteName }: EventListProps) {
 
       {/* モバイルの固定ボトムバー分パディング */}
       <main className={css({ maxW: "1400px", mx: "auto", px: 4, py: 4, pb: { base: 20, md: 4 } })}>
-        {/* ローディングインジケーター */}
+      {/* ローディングインジケーター */}
         {isLoading && (
           <div
             className={css({
@@ -68,6 +72,44 @@ export function EventList({ initialEvents, siteName }: EventListProps) {
             })}
           >
             更新中...
+          </div>
+        )}
+
+        {/* バックエンド接続エラー警告 */}
+        {apiError && (
+          <div
+            className={css({
+              mb: 4,
+              p: 3,
+              bg: "vrc.error",
+              color: "white",
+              borderRadius: "md",
+              fontSize: "sm",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 3,
+            })}
+          >
+            <span>
+              ⚠️ {apiError}
+            </span>
+            <button
+              onClick={() => refreshEvents()}
+              className={css({
+                px: 3,
+                py: 1,
+                bg: "white",
+                color: "vrc.error",
+                borderRadius: "sm",
+                fontSize: "xs",
+                fontWeight: "700",
+                cursor: "pointer",
+                _hover: { opacity: 0.8 },
+              })}
+            >
+              再試行
+            </button>
           </div>
         )}
 
