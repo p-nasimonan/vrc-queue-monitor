@@ -22,7 +22,8 @@ spec:
         - name: backend-api
           image: {{ include "vrc-queue-monitor.image" (dict "root" . "name" .Values.backendApi.image.name "tag" .Values.backendApi.image.tag) }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: {{ toJson .Values.backendApi.command }}
+          workingDir: /app
+          command: {{ toJson (default (list "python" "/app/api.py") .Values.backendApi.command) }}
           ports:
             - containerPort: {{ .Values.backendApi.service.port }}
           envFrom:

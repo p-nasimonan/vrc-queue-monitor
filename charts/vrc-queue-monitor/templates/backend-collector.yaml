@@ -22,7 +22,8 @@ spec:
         - name: backend-collector
           image: {{ include "vrc-queue-monitor.image" (dict "root" . "name" .Values.backendCollector.image.name "tag" .Values.backendCollector.image.tag) }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: {{ toJson .Values.backendCollector.command }}
+          workingDir: /app
+          command: {{ toJson (default (list "python" "/app/main.py") .Values.backendCollector.command) }}
           envFrom:
             - configMapRef:
                 name: {{ .Release.Name }}-backend-collector-config
