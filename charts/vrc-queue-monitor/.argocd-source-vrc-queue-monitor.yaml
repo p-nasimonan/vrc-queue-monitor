@@ -1,0 +1,14 @@
+helm:
+  parameters:
+  - name: image.name
+    value: ghcr.io/p-nasimonan/vrc-queue-monitor/backend
+    forcestring: true
+  - name: frontend.image.tag
+    value: sha-fa60b24
+    forcestring: true
+  - name: backendApi.image.tag
+    value: sha-fa60b24
+    forcestring: true
+  - name: backendCollector.image.tag
+    value: sha-fa60b24
+    forcestring: true
