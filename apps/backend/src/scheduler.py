@@ -2,7 +2,7 @@
 
 import os
 import logging
-from datetime import datetime, time, timedelta
+from datetime import datetime, time, timedelta, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
 
@@ -150,6 +150,57 @@ class ScheduleConfig:
         if self.is_in_burst_period():
             return self.burst_interval_seconds / 60.0
         return float(normal_interval_minutes)
+
+    def get_event_key(self, timestamp: datetime) -> str:
+        """
+        タイムスタンプからイベント日キー (YYYY-MM-DD, JST) を返す。
+
+        イベント開始時刻をまたいだ場合（深夜イベントなど）、
+        start_time より前の時刻は前日のイベント扱いにする。
+        """
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=timezone.utc)
+        event_dt = timestamp.astimezone(self.timezone)
+        if event_dt.hour < self.start_time.hour:
+            event_dt -= timedelta(days=1)
+        return event_dt.strftime("%Y-%m-%d")
+
+    def calculate_event_period(self, date: datetime) -> tuple[datetime, datetime]:
+        """
+        日付からイベント期間 (start, end) を計算して返す。
+
+        date に tzinfo がない場合は JST として扱う。
+        """
+        tz = date.tzinfo or self.timezone
+        start = date.replace(
+            hour=self.start_time.hour,
+            minute=self.start_time.minute,
+            second=0, microsecond=0,
+            tzinfo=tz,
+        )
+        end = (start + timedelta(minutes=self.duration_minutes)).replace(microsecond=999999)
+        return start, end
+
+    def get_next_start(self) -> Optional[datetime]:
+        """
+        次回の収集開始時刻を返す (JST aware)。
+        always モードは常時監視なので None を返す。
+        """
+        if self.schedule_type == "always":
+            return None
+
+        now = datetime.now(self.timezone)
+        for delta in range(0, 14):
+            candidate = (now + timedelta(days=delta)).replace(
+                hour=self.start_time.hour,
+                minute=self.start_time.minute,
+                second=0, microsecond=0,
+            )
+            if candidate <= now:
+                continue
+            if self._day_matches(candidate):
+                return candidate
+        return None
 
     def get_status_message(self) -> str:
         """現在のスケジュール状態を説明するメッセージ"""

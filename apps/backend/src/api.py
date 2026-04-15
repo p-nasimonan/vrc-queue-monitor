@@ -3,13 +3,12 @@
 import os
 import logging
 from typing import List, Optional
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ConfigDict
-from zoneinfo import ZoneInfo
 
 from db import Database
 from scheduler import ScheduleConfig
@@ -20,8 +19,6 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
 logger = logging.getLogger(__name__)
-
-JST = ZoneInfo("Asia/Tokyo")
 
 
 # Pydanticモデル定義
@@ -79,11 +76,9 @@ db = Database()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """アプリケーションライフサイクル管理"""
-    # 起動時
+    # 起動時 — migration はコレクター (main.py) のみで実行するため、ここでは接続のみ行う
     logger.info("Starting FastAPI server...")
     db.connect()
-    if not db.run_migrations():
-        logger.warning("Skipping migrations on API startup due to timeout/error; continuing startup")
     yield
     # 終了時
     logger.info("Shutting down FastAPI server...")
@@ -108,89 +103,6 @@ app.add_middleware(
 )
 
 
-def get_schedule_config():
-    """スケジュール設定を取得"""
-    start_time = os.getenv("SCHEDULE_START_TIME", "00:00")
-    duration_minutes = int(os.getenv("SCHEDULE_DURATION_MINUTES", 1440))
-    return {"start_time": start_time, "duration_minutes": duration_minutes}
-
-
-def calculate_event_period(date: datetime) -> tuple[datetime, datetime]:
-    """イベント期間を計算（JST-aware）"""
-    config = get_schedule_config()
-    start_hour, start_min = map(int, config["start_time"].split(":"))
-
-    start = date.replace(hour=start_hour, minute=start_min, second=0, microsecond=0, tzinfo=JST)
-    end = start + timedelta(minutes=config["duration_minutes"])
-    end = end.replace(microsecond=999999)
-
-    return start, end
-
-
-def get_event_key(timestamp: datetime) -> str:
-    """イベント日を特定するキーを生成"""
-    config = get_schedule_config()
-    start_hour = int(config["start_time"].split(":")[0])
-
-    # DBのTIMESTAMPはUTCとして読み出されるため、イベント日判定はJSTで行う
-    if timestamp.tzinfo is None:
-        timestamp = timestamp.replace(tzinfo=timezone.utc)
-    event_date = timestamp.astimezone(JST)
-    if event_date.hour < start_hour:
-        event_date -= timedelta(days=1)
-
-    return event_date.strftime("%Y-%m-%d")
-
-
-def _calculate_next_start() -> Optional[datetime]:
-    """次回収集開始時刻を計算（JST）"""
-    schedule_type = os.getenv("SCHEDULE_TYPE", "always")
-    schedule_days_str = os.getenv("SCHEDULE_DAYS", "")
-    start_time_str = os.getenv("SCHEDULE_START_TIME", "00:00")
-
-    # 常時監視の場合は「次回」という概念がない
-    if schedule_type == "always":
-        return None
-
-    try:
-        start_hour, start_min = map(int, start_time_str.split(":"))
-    except (ValueError, IndexError):
-        return None
-
-    # 曜日マッピング
-    day_map = {
-        "mon": 0, "tue": 1, "wed": 2, "thu": 3,
-        "fri": 4, "sat": 5, "sun": 6,
-        "月": 0, "火": 1, "水": 2, "木": 3, "金": 4, "土": 5, "日": 6,
-    }
-    schedule_days = []
-    if schedule_days_str:
-        for part in schedule_days_str.lower().split(","):
-            part = part.strip()
-            if part in day_map:
-                schedule_days.append(day_map[part])
-            elif part.isdigit():
-                schedule_days.append(int(part))
-
-    now = datetime.now(JST)
-    # 最大14日間探索
-    for delta in range(0, 14):
-        candidate = (now + timedelta(days=delta)).replace(
-            hour=start_hour, minute=start_min, second=0, microsecond=0
-        )
-        if candidate <= now:
-            continue
-
-        if schedule_type == "weekday":
-            if not schedule_days or candidate.weekday() in schedule_days:
-                return candidate
-        elif schedule_type == "day_of_month":
-            if not schedule_days or candidate.day in schedule_days:
-                return candidate
-        else:
-            return candidate
-
-    return None
 
 
 @app.get("/api/config")
@@ -198,8 +110,7 @@ async def get_config():
     """現在の監視設定と次回収集開始時刻を取得"""
     schedule = ScheduleConfig()
     poll_interval = int(os.getenv("POLL_INTERVAL_MINUTES", "2"))
-
-    next_start = _calculate_next_start()
+    next_start = schedule.get_next_start()
 
     return {
         "schedule_type": schedule.schedule_type,
@@ -315,10 +226,11 @@ async def get_event_groups(days: int = Query(30, ge=1, le=90, description="取�
             instances = {row[0]: dict(zip(columns, row)) for row in rows}
 
         # イベント日ごとにグループ化
+        schedule = ScheduleConfig()
         event_map = {}
 
         for metric in metrics:
-            event_key = get_event_key(metric["timestamp"])
+            event_key = schedule.get_event_key(metric["timestamp"])
 
             if event_key not in event_map:
                 event_map[event_key] = {}
@@ -339,7 +251,7 @@ async def get_event_groups(days: int = Query(30, ge=1, le=90, description="取�
         result = []
         for event_date, instance_metrics in sorted(event_map.items(), reverse=True):
             date_obj = datetime.strptime(event_date, "%Y-%m-%d")
-            start_time, end_time = calculate_event_period(date_obj)
+            start_time, end_time = schedule.calculate_event_period(date_obj)
 
             event_instances = []
             for instance_id, metrics_list in instance_metrics.items():

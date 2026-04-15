@@ -141,57 +141,83 @@ class VRChatAPI:
             logger.error(f"Error getting group instances: {e}")
             return []
 
+    def _normalize_instance_dict(self, instance) -> dict:
+        """
+        SDK Instance オブジェクトから必要なフィールドを snake_case に正規化した dict を返す。
+
+        vrchatapi SDK は to_dict() で camelCase キーを返す場合があり、
+        またオブジェクト属性と辞書キーで命名が異なることがある。
+        このメソッドを経由することで呼び出し元は常に snake_case キーを期待できる。
+        """
+        instance_dict = instance.to_dict()
+
+        # 生のAPIレスポンス確認（DEBUG時のみ）
+        logger.debug(f"--- RAW API RESPONSE DUMP ---")
+        logger.debug(str({k: v for k, v in instance_dict.items() if v is not None}))
+
+        # queue フィールド（SDKバージョンによって snake_case / camelCase が混在）
+        queue_enabled = (
+            getattr(instance, 'queue_enabled', None)
+            if hasattr(instance, 'queue_enabled')
+            else instance_dict.get('queueEnabled', instance_dict.get('queue_enabled'))
+        )
+        queue_size = (
+            getattr(instance, 'queue_size', None)
+            if hasattr(instance, 'queue_size')
+            else instance_dict.get('queueSize', instance_dict.get('queue_size'))
+        )
+
+        # n_users / user_count（SDKの仕様揺れ対策）
+        n_users = getattr(
+            instance, 'n_users',
+            getattr(instance, 'user_count', instance_dict.get('n_users', 0))
+        )
+        user_count = getattr(
+            instance, 'user_count',
+            instance_dict.get('user_count', instance_dict.get('userCount'))
+        )
+
+        capacity = getattr(instance, 'capacity', instance_dict.get('capacity', 0))
+        name = (
+            getattr(instance, 'name', None)
+            or getattr(instance, 'instance_id', None)
+            or instance_dict.get('name', instance_dict.get('instanceId'))
+        )
+
+        logger.debug(
+            f"Normalized {name}: n_users={n_users}, user_count={user_count}, "
+            f"queue_enabled={queue_enabled}, queue_size={queue_size}, capacity={capacity}"
+        )
+
+        instance_dict['name'] = name
+        instance_dict['queue_enabled'] = queue_enabled
+        instance_dict['queue_size'] = queue_size
+        instance_dict['n_users'] = n_users
+        if user_count is not None:
+            instance_dict['user_count'] = user_count
+
+        return instance_dict
+
     def get_instance_detail(self, world_id: str, instance_id: str) -> Optional[dict]:
         """インスタンスの詳細情報（queueSize含む）を取得"""
+        if not self.ensure_authenticated() or self.instances_api is None:
+            return None
         try:
             instance = self.instances_api.get_instance(world_id, instance_id)
-            # vrchatapi SDK の Instance オブジェクトから安全に値を取得
-            instance_dict = instance.to_dict()
-            
-            # 生のAPIレスポンスの構造確認用（LOG_LEVEL=DEBUGの時だけ出力される）
-            logger.debug(f"--- RAW API RESPONSE DUMP FOR {world_id}:{instance_id} ---")
-            logger.debug(str({k: v for k, v in instance_dict.items() if v is not None}))
-            
-            queue_enabled = instance.queue_enabled if hasattr(instance, 'queue_enabled') else instance_dict.get('queueEnabled', instance_dict.get('queue_enabled'))
-            queue_size = instance.queue_size if hasattr(instance, 'queue_size') else instance_dict.get('queueSize', instance_dict.get('queue_size'))
-            
-            # n_users と user_count (SDKの仕様揺れ対策)
-            n_users = getattr(instance, 'n_users', getattr(instance, 'user_count', instance_dict.get('n_users', 0)))
-            user_count = getattr(instance, 'user_count', instance_dict.get('user_count', instance_dict.get('userCount')))
-            
-            # name と capacity
-            capacity = getattr(instance, 'capacity', instance_dict.get('capacity', 0))
-            name = getattr(instance, 'name', None) or getattr(instance, 'instance_id', None) or instance_dict.get("name", instance_dict.get("instanceId"))
+            return self._normalize_instance_dict(instance)
 
-            # デバッグ: 主要フィールドを確認
-            logger.debug(f"Fetched {name}: "
-                        f"n_users={n_users}, "
-                        f"user_count={user_count}, "
-                        f"queueEnabled={queue_enabled}, "
-                        f"queueSize={queue_size}")
-            
-            # 取得した値を辞書にセットし直しておく（呼び出し元で使いやすくするため）
-            instance_dict["name"] = name
-            instance_dict["queue_enabled"] = queue_enabled
-            instance_dict["queue_size"] = queue_size
-            instance_dict["n_users"] = n_users
-            if user_count is not None:
-                instance_dict["user_count"] = user_count
-            
-            return instance_dict
-
-        except UnauthorizedException as e:
-            # 認証切れの場合は再ログイン
-            logger.warning(f"Authentication expired, retrying login...")
+        except UnauthorizedException:
+            # 認証切れ → 再ログインして1回だけリトライ
+            logger.warning("Authentication expired, re-logging in...")
             self._authenticated = False
-            if self.ensure_authenticated():
-                try:
-                    instance = self.instances_api.get_instance(world_id, instance_id)
-                    return instance.to_dict()
-                except Exception as retry_e:
-                    logger.error(f"Retry failed: {retry_e}")
-                    return None
-            return None
+            if not self.ensure_authenticated() or self.instances_api is None:
+                return None
+            try:
+                instance = self.instances_api.get_instance(world_id, instance_id)
+                return self._normalize_instance_dict(instance)
+            except Exception as retry_e:
+                logger.error(f"Retry after re-auth failed: {retry_e}")
+                return None
         except ApiException as e:
             logger.warning(f"Failed to get instance detail ({world_id}:{instance_id}): {e}")
             return None
