@@ -27,6 +27,19 @@ class VRChatAPI:
         self._last_login_attempt: Optional[datetime] = None
         self._rate_limit_until: Optional[datetime] = None
 
+    def _extract_retry_after(self, exc) -> Optional[int]:
+        """例外の headers から Retry-After 秒数を取り出す。なければ None。"""
+        headers = getattr(exc, 'headers', None)
+        if not headers:
+            return None
+        value = headers.get('Retry-After')
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return None
+
     def login(self) -> bool:
         """VRChatにログインし、セッションを確立する"""
         # レート制限チェック
@@ -95,7 +108,13 @@ class VRChatAPI:
                         logger.error(f"Authentication failed: {e.reason}")
                         return False
                 else:
-                    logger.error(f"Login failed: {e}")
+                    # 401 の Retry-After も記録する
+                    retry_after = self._extract_retry_after(e)
+                    if retry_after:
+                        self._rate_limit_until = datetime.now() + timedelta(seconds=retry_after)
+                        logger.error(f"Login rejected (invalid credentials). Rate limited for {retry_after}s")
+                    else:
+                        logger.error(f"Login failed: {e}")
                     return False
 
             self._authenticated = True
@@ -104,11 +123,10 @@ class VRChatAPI:
             return True
 
         except ApiException as e:
-            # Retry-After ヘッダーをチェック
-            if hasattr(e, 'headers') and 'Retry-After' in e.headers:
-                retry_after = int(e.headers['Retry-After'])
+            retry_after = self._extract_retry_after(e)
+            if retry_after:
                 self._rate_limit_until = datetime.now() + timedelta(seconds=retry_after)
-                logger.error(f"Rate limited. Retry after {retry_after} seconds")
+                logger.error(f"Rate limited. Retry after {retry_after}s")
             else:
                 logger.error(f"API Exception during login: {e}")
             return False

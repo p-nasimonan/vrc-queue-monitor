@@ -5,6 +5,7 @@ import sys
 import time
 import logging
 import schedule
+from datetime import datetime
 
 from vrc_api import VRChatAPI
 from db import Database
@@ -199,7 +200,14 @@ def main():
         if api.login():
             break
         if attempt < max_retries:
-            logger.warning(f"Authentication failed, retrying...")
+            # レート制限がある場合は、次の試行前に待機する
+            if api._rate_limit_until:
+                wait = (api._rate_limit_until - datetime.now()).total_seconds()
+                if wait > 0:
+                    logger.warning(f"Rate limited by VRChat. Waiting {wait:.0f}s before retry...")
+                    time.sleep(wait)
+            else:
+                logger.warning("Authentication failed, retrying...")
         else:
             logger.error("Failed to authenticate with VRChat API after all retries")
             sys.exit(1)
