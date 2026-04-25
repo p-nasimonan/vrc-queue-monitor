@@ -3,8 +3,9 @@
 import os
 import logging
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,6 +20,8 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+JST = ZoneInfo("Asia/Tokyo")
 
 
 # Pydanticモデル定義
@@ -225,21 +228,23 @@ async def get_event_groups(days: int = Query(30, ge=1, le=90, description="取�
             rows = cur.fetchall()
             instances = {row[0]: dict(zip(columns, row)) for row in rows}
 
-        # イベント日ごとにグループ化
-        schedule = ScheduleConfig()
-        event_map = {}
+        # インスタンスの created_at（JST日付）でグループ化
+        # → 日を跨いだイベントでも、インスタンスが作成された日に統一される
+        def _instance_event_date(created_at: datetime) -> str:
+            if created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=timezone.utc)
+            return created_at.astimezone(JST).strftime("%Y-%m-%d")
+
+        event_map: dict[str, dict[int, list]] = {}
 
         for metric in metrics:
-            event_key = schedule.get_event_key(metric["timestamp"])
-
-            if event_key not in event_map:
-                event_map[event_key] = {}
-
             instance_id = metric["instance_id"]
-            if instance_id not in event_map[event_key]:
-                event_map[event_key][instance_id] = []
+            inst = instances.get(instance_id)
+            if not inst:
+                continue
 
-            event_map[event_key][instance_id].append({
+            event_key = _instance_event_date(inst["created_at"])
+            event_map.setdefault(event_key, {}).setdefault(instance_id, []).append({
                 "timestamp": metric["timestamp"],
                 "instance_id": instance_id,
                 "queue_size": metric["queue_size"],
@@ -250,34 +255,34 @@ async def get_event_groups(days: int = Query(30, ge=1, le=90, description="取�
         # レスポンス構築
         result = []
         for event_date, instance_metrics in sorted(event_map.items(), reverse=True):
-            date_obj = datetime.strptime(event_date, "%Y-%m-%d")
-            start_time, end_time = schedule.calculate_event_period(date_obj)
-
             event_instances = []
+            all_timestamps = []
+
             for instance_id, metrics_list in instance_metrics.items():
-                if instance_id in instances:
-                    inst = instances[instance_id]
-                    event_instances.append({
-                        "id": inst["id"],
-                        "location": inst["location"],
-                        "name": inst["name"],
-                        "display_name": inst.get("display_name"),
-                        "world_name": inst["world_name"],
-                        "capacity": inst["capacity"],
-                        "world_thumbnail_url": inst.get("world_thumbnail_url"),
-                        "world_image_url": inst.get("world_image_url"),
-                        "instance_type": inst.get("instance_type"),
-                        "region": inst.get("region"),
-                        "created_at": inst["created_at"],
-                        "is_active": inst["is_active"],
-                        "metrics": sorted(metrics_list, key=lambda x: x["timestamp"]),
-                    })
+                inst = instances[instance_id]
+                sorted_metrics = sorted(metrics_list, key=lambda x: x["timestamp"])
+                all_timestamps.extend(m["timestamp"] for m in sorted_metrics)
+                event_instances.append({
+                    "id": inst["id"],
+                    "location": inst["location"],
+                    "name": inst["name"],
+                    "display_name": inst.get("display_name"),
+                    "world_name": inst["world_name"],
+                    "capacity": inst["capacity"],
+                    "world_thumbnail_url": inst.get("world_thumbnail_url"),
+                    "world_image_url": inst.get("world_image_url"),
+                    "instance_type": inst.get("instance_type"),
+                    "region": inst.get("region"),
+                    "created_at": inst["created_at"],
+                    "is_active": inst["is_active"],
+                    "metrics": sorted_metrics,
+                })
 
             if event_instances:
                 result.append({
                     "eventDate": event_date,
-                    "startTime": start_time,
-                    "endTime": end_time,
+                    "startTime": min(all_timestamps),
+                    "endTime": max(all_timestamps),
                     "instances": event_instances,
                 })
 

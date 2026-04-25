@@ -37,8 +37,6 @@ SCHEDULE_START_TIME=22:00            # 開始時刻（HH:MM）
 SCHEDULE_DURATION_MINUTES=150        # 監視継続時間（分）例: 150 = 2時間30分
 POLL_INTERVAL_MINUTES=5              # メトリクス収集間隔（分）- 通常時
 DISCOVERY_INTERVAL_MINUTES=10        # インスタンス発見間隔（分）- 低頻度
-BURST_DURATION_MINUTES=5             # バースト期間（イベント開始から何分間）
-BURST_INTERVAL_SECONDS=30            # バースト期間中の収集間隔（秒）
 ```
 
 ### API設定
@@ -62,36 +60,15 @@ VRChat APIの負荷を減らすため、データ収集を2つのフェーズに
 - **処理**: 新しいインスタンスをDBに登録、既存インスタンスを更新
 - **データ**: `location`, `name`, `world_name`, `capacity`, `world_thumbnail_url`, `world_image_url`, `instance_type`, `region`
 
-#### 2. メトリクス収集（適応的頻度）
-- **頻度**:
-  - **バースト期間**（イベント開始直後5分間）: 30秒ごと（`BURST_INTERVAL_SECONDS`）
-  - **通常期間**: デフォルト2分ごと（`POLL_INTERVAL_MINUTES`）
+#### 2. メトリクス収集（固定頻度）
+- **頻度**: デフォルト2分ごと（`POLL_INTERVAL_MINUTES`）
 - **API**: `GET /instances/{worldId}:{instanceId}` - 各インスタンスの詳細を取得
 - **処理**: DBに保存されたアクティブなインスタンスのみ対象
 - **データ**: `queueSize`, `queueEnabled`, `n_users`（現在のキュー情報）
 
-#### バースト期間
-イベント開始直後は参加者が急増するため、高頻度で収集してデータの精度を上げます：
-
-- **開始検知**: スケジュール期間が始まった瞬間（例: 22:00）
-- **期間**: デフォルト5分間（`BURST_DURATION_MINUTES`）
-- **間隔**: デフォルト30秒（`BURST_INTERVAL_SECONDS`）
-- **終了後**: 通常の収集間隔に戻る
-
-```python
-# 例: 22:00にイベント開始、4つのインスタンスがある場合
-# 22:00-22:05 (バースト期間):
-#   30秒ごとに collect_metrics() → 詳細API 4回
-#   → 0秒: inst1, 2秒: inst2, 4秒: inst3, 6秒: inst4
-#   → 10回収集（5分 ÷ 30秒）
-# 22:05以降 (通常期間):
-#   2分ごとに collect_metrics() → 詳細API 4回
-```
-
 #### メリット
 - グループAPI呼び出しを削減（10分に1回）
-- イベント開始直後の重要な時間帯を細かく記録
-- 通常時はAPI呼び出しを抑えてレート制限回避
+- スケジュール設定時はアクティブ期間外のAPI呼び出しがゼロ
 - ワールドサムネイルやリージョン情報も取得してUI表示を強化
 
 ### 認証フロー

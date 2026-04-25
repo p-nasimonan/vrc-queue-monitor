@@ -4,14 +4,12 @@ import os
 import sys
 import time
 import logging
-import schedule
 from datetime import datetime
 
 from vrc_api import VRChatAPI
 from db import Database
 from scheduler import ScheduleConfig
 
-# ログ設定
 log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
     level=getattr(logging, log_level, logging.INFO),
@@ -33,7 +31,7 @@ def _extract_world_images(world: dict | object) -> tuple[str | None, str | None]
 
 
 def discover_instances(api: VRChatAPI, db: Database, group_id: str):
-    """グループの新しいインスタンスを発見してDBに登録（低頻度）"""
+    """グループの新しいインスタンスを発見してDBに登録"""
     try:
         logger.info("Discovering group instances...")
         group_instances = api.get_group_instances(group_id)
@@ -82,16 +80,8 @@ def discover_instances(api: VRChatAPI, db: Database, group_id: str):
         logger.error(f"Error during instance discovery: {e}")
 
 
-def collect_metrics(api: VRChatAPI, db: Database, schedule_config: ScheduleConfig):
-    """アクティブなインスタンスのメトリクスを収集（高頻度）"""
-
-    if not schedule_config.is_active_now():
-        logger.debug("Outside of scheduled monitoring period, skipping collection")
-        return
-
-    if schedule_config.is_in_burst_period():
-        logger.info("📈 In BURST period - high frequency collection")
-
+def collect_metrics(api: VRChatAPI, db: Database):
+    """アクティブなインスタンスのメトリクスを収集"""
     try:
         active_instances = db.get_active_instances()
 
@@ -114,29 +104,21 @@ def collect_metrics(api: VRChatAPI, db: Database, schedule_config: ScheduleConfi
             if not detail:
                 continue
 
-            # queue情報
-            queue_enabled = detail.get("queue_enabled", False)
-            if queue_enabled is None:
-                queue_enabled = False
+            queue_enabled = detail.get("queue_enabled", False) or False
             queue_size = detail.get("queue_size", 0) or 0
-
             n_users = detail.get("n_users", 0) or 0
-            # user_count はローディング中のズレがあるため、ユーザーの要望通り「最大定員 (capacity)」を基準にする
             capacity = detail.get("capacity", 0) or 0
-            
+
             if capacity > 0 and n_users > capacity:
-                # 最大定員を超えている分を「待機列」として処理する
                 queue_size = n_users - capacity
                 current_users = capacity
             else:
                 current_users = n_users
                 queue_size = 0
 
-            # プラットフォーム別ユーザー数
             platforms = detail.get("platforms") or {}
             pc_users = platforms.get("standalonewindows", 0) or 0
 
-            # インスタンス情報をdetailで更新（capacityなども正しい値で上書き）
             display_name = detail.get("display_name") or detail.get("displayName") or None
             world = detail.get("world") or {}
             world_name = world.get("name", inst["world_name"]) if isinstance(world, dict) else inst["world_name"]
@@ -145,7 +127,6 @@ def collect_metrics(api: VRChatAPI, db: Database, schedule_config: ScheduleConfi
             region = detail.get("region") or detail.get("photon_region") or inst.get("region", "unknown")
             name = detail.get("name", inst["name"])
 
-            # インスタンス情報をDB更新（capacity, display_name等を正確な値で上書き）
             db.upsert_instance(
                 location, name, world_name, capacity,
                 world_thumbnail_url or inst.get("world_thumbnail_url"),
@@ -166,7 +147,6 @@ def collect_metrics(api: VRChatAPI, db: Database, schedule_config: ScheduleConfi
 
 
 def main():
-    """メインエントリーポイント"""
     group_id = os.environ.get("VRC_GROUP_ID")
     if not group_id:
         logger.error("VRC_GROUP_ID environment variable is required")
@@ -200,7 +180,6 @@ def main():
         if api.login():
             break
         if attempt < max_retries:
-            # レート制限がある場合は、次の試行前に待機する
             if api._rate_limit_until:
                 wait = (api._rate_limit_until - datetime.now()).total_seconds()
                 if wait > 0:
@@ -212,37 +191,28 @@ def main():
             logger.error("Failed to authenticate with VRChat API after all retries")
             sys.exit(1)
 
-    logger.info("Running initial instance discovery...")
-    discover_instances(api, db, group_id)
+    poll_interval_seconds = poll_interval * 60
+    discovery_interval_seconds = discovery_interval * 60
 
-    if schedule_config.is_active_now():
-        logger.info("Running initial metrics collection...")
-        collect_metrics(api, db, schedule_config)
-    else:
-        logger.info("Outside of scheduled period, waiting for next active window...")
+    # 0 にしておくことで、最初の active tick に即実行される
+    last_discovery = 0.0
+    last_metrics = 0.0
 
-    schedule.every(discovery_interval).minutes.do(
-        discover_instances, api=api, db=db, group_id=group_id
-    )
-
-    logger.info(f"Scheduled: metrics adaptive (burst: {schedule_config.burst_interval_seconds}s, "
-                f"normal: {poll_interval}min), discovery every {discovery_interval}min")
-
-    last_metrics_collection = time.time()
     try:
         while True:
-            schedule.run_pending()
-
             now = time.time()
-            current_interval_minutes = schedule_config.get_current_poll_interval(poll_interval)
-            interval_seconds = current_interval_minutes * 60
 
-            if now - last_metrics_collection >= interval_seconds:
-                if schedule_config.is_active_now():
-                    collect_metrics(api, db, schedule_config)
-                last_metrics_collection = now
+            if schedule_config.is_active_now():
+                if now - last_discovery >= discovery_interval_seconds:
+                    discover_instances(api, db, group_id)
+                    last_discovery = now
+
+                if now - last_metrics >= poll_interval_seconds:
+                    collect_metrics(api, db)
+                    last_metrics = now
 
             time.sleep(5)
+
     except KeyboardInterrupt:
         logger.info("Shutting down...")
     finally:
