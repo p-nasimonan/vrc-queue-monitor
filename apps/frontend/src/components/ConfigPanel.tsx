@@ -54,7 +54,7 @@ export function ConfigPanel() {
             .catch((e) => console.error("設定の取得に失敗:", e));
     }, []);
 
-    if (!config) return null;
+    if (!config || config.schedule_type === "always") return null;
 
     return (
         <div
