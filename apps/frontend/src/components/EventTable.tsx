@@ -87,6 +87,7 @@ export function EventTable({ initialEvents, siteName }: EventTableProps) {
           eStart,
           eEnd,
           eTime,
+          worldName: inst.world_name,
           instName,
           capacity: inst.capacity,
           maxCurrent,
@@ -103,6 +104,7 @@ export function EventTable({ initialEvents, siteName }: EventTableProps) {
       "イベント日",
       "開始時間",
       "終了時間",
+      "ワールド名",
       "インスタンス名",
       "定員",
       "最高参加人数",
@@ -115,6 +117,7 @@ export function EventTable({ initialEvents, siteName }: EventTableProps) {
         `"${row.eDate}"`,
         `"${row.eStart}"`,
         `"${row.eEnd}"`,
+        `"${row.worldName.replace(/"/g, '""')}"`,
         `"${row.instName.replace(/"/g, '""')}"`,
         row.capacity,
         row.maxCurrent,
@@ -180,7 +183,7 @@ export function EventTable({ initialEvents, siteName }: EventTableProps) {
                 <tr className={css({ bg: "bg.subtle", borderBottom: "2px solid", borderColor: "border" })}>
                   <th className={css({ p: 3, color: "text.muted", fontWeight: "600" })}>イベント日</th>
                   <th className={css({ p: 3, color: "text.muted", fontWeight: "600" })}>時間</th>
-                  <th className={css({ p: 3, color: "text.muted", fontWeight: "600" })}>インスタンス名</th>
+                  <th className={css({ p: 3, color: "text.muted", fontWeight: "600" })}>ワールド名 / インスタンス名</th>
                   <th className={css({ p: 3, color: "text.muted", fontWeight: "600" })}>定員</th>
                   <th className={css({ p: 3, color: "text.muted", fontWeight: "600" })}>最高参加人数</th>
                   <th className={css({ p: 3, color: "text.muted", fontWeight: "600" })}>最高待機列</th>
@@ -203,8 +206,9 @@ export function EventTable({ initialEvents, siteName }: EventTableProps) {
                     <td className={css({ p: 3, color: "text" })}>
                       {row.isFirstInEvent ? row.eTime : ""}
                     </td>
-                    <td className={css({ p: 3, color: "text", fontWeight: "500" })}>
-                      {row.instName}
+                    <td className={css({ p: 3, color: "text" })}>
+                      <div className={css({ fontWeight: "600" })}>{row.worldName}</div>
+                      <div className={css({ fontSize: "xs", color: "text.muted" })}>{row.instName}</div>
                     </td>
                     <td className={css({ p: 3, color: "text" })}>{row.capacity}</td>
                     <td className={css({ p: 3, color: "text", fontWeight: "bold" })}>{row.maxCurrent}</td>
