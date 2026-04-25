@@ -110,11 +110,12 @@ def collect_metrics(api: VRChatAPI, db: Database):
             capacity = detail.get("capacity", 0) or 0
 
             if capacity > 0 and n_users > capacity:
+                # APIがn_usersをcapacity超で返す場合のフォールバック計算
                 queue_size = n_users - capacity
                 current_users = capacity
             else:
                 current_users = n_users
-                queue_size = 0
+                # queue_size はAPIの値をそのまま使う（ここでリセットしない）
 
             platforms = detail.get("platforms") or {}
             pc_users = platforms.get("standalonewindows", 0) or 0
