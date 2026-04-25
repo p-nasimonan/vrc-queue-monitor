@@ -6,7 +6,8 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "0"
 
-    ## argocd-image-updater: mainブランチpush時に v0.<sha> タグで自動更新
+    ## argocd-image-updater
+    ## backend は api/collector で同じイメージを使うので1エイリアスにまとめる
     argocd-image-updater.argoproj.io/image-list: >-
       backend=ghcr.io/p-nasimonan/vrc-queue-monitor/backend,
       frontend=ghcr.io/p-nasimonan/vrc-queue-monitor/frontend
@@ -18,10 +19,11 @@ metadata:
     argocd-image-updater.argoproj.io/backend.allow-tags: regexp:^v[0-9]
     argocd-image-updater.argoproj.io/frontend.allow-tags: regexp:^v[0-9]
 
-    ## write-back: ArgoCD Application のパラメータオーバーライドとして保存
+    ## write-back: Application の helm.parameters に書き込む
+    ## auto-sync が有効なら自動的に再デプロイされる
     argocd-image-updater.argoproj.io/write-back-method: argocd
 
-    ## 更新するHelmパラメータ（タグのみ; repositoryはChart側で固定）
+    ## エイリアス名と一致させること（alias.helm.image-tag）
     argocd-image-updater.argoproj.io/backend.helm.image-tag: backend.image.tag
     argocd-image-updater.argoproj.io/frontend.helm.image-tag: frontend.image.tag
 
@@ -35,14 +37,13 @@ spec:
       releaseName: vrc-queue-monitor
       valueFiles:
         - values.yaml
-      ## シークレットは別途 SealedSecret または外部で管理
-      ## values.yaml の secrets.existingSecret に Secret 名を指定すること
 
   destination:
     server: https://kubernetes.default.svc
-    namespace: vrc-monitor  # 変更する場合は namespaceOverride も合わせて設定
+    namespace: vrc-monitor
 
   syncPolicy:
+    ## automated を有効にしないと Image Updater の write-back 後に sync されない
     automated:
       prune: true
       selfHeal: true
