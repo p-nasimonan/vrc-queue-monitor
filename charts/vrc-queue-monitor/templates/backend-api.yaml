@@ -28,7 +28,7 @@ spec:
             - containerPort: {{ .Values.backendApi.service.port }}
           envFrom:
             - configMapRef:
-                name: {{ .Release.Name }}-backend-api-config
+                name: {{ .Release.Name }}-backend-config
           env:
             - name: DB_PASSWORD
               valueFrom:

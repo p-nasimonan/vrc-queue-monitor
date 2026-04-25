@@ -33,13 +33,31 @@ frontend:
     ## 上書きしたい場合は以下をコメントアウト
     # BACKEND_API_URL: "https://api.example.com"
 
+## ── バックエンド共通設定 ──────────────────────────────
+## API・コレクター両方が参照する ConfigMap に書き出される。
+## 使わない変数は各プロセスが無視する。
+backend:
+  config:
+    # API サーバー設定
+    API_PORT: "8000"
+    ENV: "production"
+    ## CORS_ORIGINS: "https://vrc-monitor.example.com"
+    # コレクター設定
+    POLL_INTERVAL_MINUTES: "5"
+    DISCOVERY_INTERVAL_MINUTES: "10"
+    # スケジュール設定（両方で共有）
+    SCHEDULE_TYPE: "always"   # always | weekday | day_of_month
+    SCHEDULE_DAYS: ""         # 例: "sat,sun" または "5,15,25"
+    SCHEDULE_START_TIME: "22:00"
+    SCHEDULE_DURATION_MINUTES: "150"
+
 ## ── バックエンド API ──────────────────────────────────
 backendApi:
   enabled: true
   replicaCount: 1
   image:
     name: backend
-    tag: ""        # 未設定時は image.tag を使用
+    tag: ""
   command: ["python", "api.py"]
   resources:
     requests:
@@ -51,23 +69,13 @@ backendApi:
   service:
     type: ClusterIP
     port: 8000
-  config:
-    API_PORT: "8000"
-    ENV: "production"
-    SCHEDULE_TYPE: "always"
-    SCHEDULE_DAYS: ""
-    SCHEDULE_START_TIME: "22:00"
-    SCHEDULE_DURATION_MINUTES: "150"
-    POLL_INTERVAL_MINUTES: "5"
-    ## フロントエンドのドメインを指定（Next.js経由なら不要だが念のため設定）
-    ## CORS_ORIGINS: "https://vrc-monitor.example.com"
 
 ## ── バックエンド コレクター ───────────────────────────
 backendCollector:
   enabled: true
   image:
     name: backend
-    tag: ""        # 未設定時は image.tag を使用
+    tag: ""
   command: ["python", "main.py"]
   resources:
     requests:
@@ -76,13 +84,6 @@ backendCollector:
     limits:
       cpu: 200m
       memory: 256Mi
-  config:
-    POLL_INTERVAL_MINUTES: "5"
-    DISCOVERY_INTERVAL_MINUTES: "10"
-    SCHEDULE_TYPE: "always"
-    SCHEDULE_DAYS: ""
-    SCHEDULE_START_TIME: "22:00"
-    SCHEDULE_DURATION_MINUTES: "150"
 
 ## ── PostgreSQL ────────────────────────────────────────
 postgres:

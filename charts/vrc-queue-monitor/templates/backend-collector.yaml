@@ -26,7 +26,7 @@ spec:
           command: {{ toJson (default (list "python" "/app/main.py") .Values.backendCollector.command) }}
           envFrom:
             - configMapRef:
-                name: {{ .Release.Name }}-backend-collector-config
+                name: {{ .Release.Name }}-backend-config
           env:
             - name: DB_PASSWORD
               valueFrom:

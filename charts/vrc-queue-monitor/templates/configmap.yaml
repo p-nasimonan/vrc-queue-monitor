@@ -17,36 +17,17 @@ data:
   {{- end }}
 {{- end }}
 ---
-## バックエンド API ConfigMap
-{{- if .Values.backendApi.enabled }}
+## バックエンド共通 ConfigMap（API・コレクター共用）
+{{- if or .Values.backendApi.enabled .Values.backendCollector.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ .Release.Name }}-backend-api-config
+  name: {{ .Release.Name }}-backend-config
   labels:
     {{- include "vrc-queue-monitor.labels" . | nindent 4 }}
-    app.kubernetes.io/component: backend-api
+    app.kubernetes.io/component: backend
 data:
-  {{- with .Values.backendApi.config }}
-  {{- toYaml . | nindent 2 }}
-  {{- end }}
-  DB_HOST: {{ .Release.Name }}-postgres
-  DB_PORT: "{{ .Values.postgres.service.port }}"
-  DB_NAME: {{ .Values.postgres.config.DB_NAME }}
-  DB_USER: {{ .Values.postgres.config.DB_USER }}
-{{- end }}
----
-## バックエンド Collector ConfigMap
-{{- if .Values.backendCollector.enabled }}
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: {{ .Release.Name }}-backend-collector-config
-  labels:
-    {{- include "vrc-queue-monitor.labels" . | nindent 4 }}
-    app.kubernetes.io/component: backend-collector
-data:
-  {{- with .Values.backendCollector.config }}
+  {{- with .Values.backend.config }}
   {{- toYaml . | nindent 2 }}
   {{- end }}
   DB_HOST: {{ .Release.Name }}-postgres

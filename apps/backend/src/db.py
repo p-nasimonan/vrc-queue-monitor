@@ -62,29 +62,67 @@ class Database:
             self.conn.close()
             logger.info("Database connection closed")
 
+    def _column_exists(self, cur, table: str, column: str) -> bool:
+        """information_schema でカラム存在確認（テーブルロックなし）"""
+        cur.execute(
+            "SELECT 1 FROM information_schema.columns WHERE table_name=%s AND column_name=%s",
+            (table, column),
+        )
+        return cur.fetchone() is not None
+
+    def _column_has_default(self, cur, table: str, column: str) -> bool:
+        """カラムに DEFAULT が設定されているか確認"""
+        cur.execute(
+            "SELECT column_default FROM information_schema.columns WHERE table_name=%s AND column_name=%s",
+            (table, column),
+        )
+        row = cur.fetchone()
+        return row is not None and row[0] is not None
+
     def run_migrations(self) -> bool:
-        """スキーママイグレーションを実行（冪等）"""
+        """スキーママイグレーションを実行（冪等・高速）
+
+        information_schema でカラムの存在を事前確認することで、
+        すでに適用済みの ALTER TABLE は実行しない。
+        これにより DDL ロックが発生せず、起動が即座に完了する。
+        """
         if not self.ensure_connected():
             return False
 
-        migrations = [
-            "ALTER TABLE instances ADD COLUMN IF NOT EXISTS world_thumbnail_url TEXT",
-            "ALTER TABLE instances ADD COLUMN IF NOT EXISTS world_image_url TEXT",
-            "ALTER TABLE instances ADD COLUMN IF NOT EXISTS instance_type TEXT",
-            "ALTER TABLE instances ADD COLUMN IF NOT EXISTS region TEXT",
-            "ALTER TABLE instances ADD COLUMN IF NOT EXISTS display_name TEXT",
-            "ALTER TABLE metrics ADD COLUMN IF NOT EXISTS pc_users SMALLINT NOT NULL DEFAULT 0",
+        # (テーブル名, カラム名, 追加する SQL)
+        column_migrations: list[tuple[str, str, str]] = [
+            ("instances", "world_thumbnail_url", "ALTER TABLE instances ADD COLUMN world_thumbnail_url TEXT"),
+            ("instances", "world_image_url",     "ALTER TABLE instances ADD COLUMN world_image_url TEXT"),
+            ("instances", "instance_type",        "ALTER TABLE instances ADD COLUMN instance_type TEXT"),
+            ("instances", "region",               "ALTER TABLE instances ADD COLUMN region TEXT"),
+            ("instances", "display_name",         "ALTER TABLE instances ADD COLUMN display_name TEXT"),
+            ("metrics",   "pc_users",             "ALTER TABLE metrics ADD COLUMN pc_users SMALLINT NOT NULL DEFAULT 0"),
+            # 生データ保存用カラム
+            ("metrics",   "n_users",              "ALTER TABLE metrics ADD COLUMN n_users SMALLINT NOT NULL DEFAULT 0"),
+            ("metrics",   "queue_enabled",        "ALTER TABLE metrics ADD COLUMN queue_enabled BOOLEAN NOT NULL DEFAULT FALSE"),
         ]
 
         try:
             with self.conn.cursor() as cur:
-                # 起動時のDDLロック待ちで無限にハングしないように制限する
-                cur.execute("SET LOCAL lock_timeout = '5s'")
-                cur.execute("SET LOCAL statement_timeout = '30s'")
-                for sql in migrations:
-                    cur.execute(sql)
+                cur.execute("SET LOCAL lock_timeout = '3s'")
+                cur.execute("SET LOCAL statement_timeout = '10s'")
+
+                applied = 0
+                for table, column, sql in column_migrations:
+                    if not self._column_exists(cur, table, column):
+                        cur.execute(sql)
+                        applied += 1
+
+                # current_users に DEFAULT を付与（新規 INSERT で省略できるようにする）
+                if not self._column_has_default(cur, "metrics", "current_users"):
+                    cur.execute("ALTER TABLE metrics ALTER COLUMN current_users SET DEFAULT 0")
+                    applied += 1
+
             self.conn.commit()
-            logger.info("Migrations applied successfully")
+            if applied:
+                logger.info(f"Migrations applied: {applied} changes")
+            else:
+                logger.info("Migrations: already up to date, skipped")
             return True
         except Exception as e:
             logger.error(f"Migration failed: {e}")
@@ -170,21 +208,28 @@ class Database:
             self.conn.rollback()
             return 0
 
-    def insert_metric(self, instance_id: int, queue_size: int, current_users: int, pc_users: int = 0) -> bool:
-        """メトリクスを記録"""
+    def insert_metric(
+        self,
+        instance_id: int,
+        n_users: int,
+        queue_size: int,
+        queue_enabled: bool,
+        pc_users: int = 0,
+    ) -> bool:
+        """VRChat API から取得した生値をそのまま記録する。
+        派生値（current_users 等）は API 返却時に計算する。
+        """
         if not self.ensure_connected():
             return False
 
         try:
             with self.conn.cursor() as cur:
                 cur.execute("""
-                    INSERT INTO metrics (instance_id, queue_size, current_users, pc_users)
-                    VALUES (%s, %s, %s, %s)
-                """, (instance_id, queue_size, current_users, pc_users))
-
+                    INSERT INTO metrics (instance_id, n_users, queue_size, queue_enabled, pc_users)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (instance_id, n_users, queue_size, queue_enabled, pc_users))
                 self.conn.commit()
                 return True
-
         except Exception as e:
             logger.error(f"Error inserting metric: {e}")
             self.conn.rollback()
@@ -212,14 +257,15 @@ class Database:
             return []
 
     def get_instance_metrics(self, instance_id: int, hours: int = 3) -> list[dict]:
-        """特定インスタンスの直近メトリクスを取得"""
+        """特定インスタンスの直近メトリクスを取得（生値）"""
         if not self.ensure_connected():
             return []
 
         try:
             with self.conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
-                    SELECT timestamp, queue_size, current_users, pc_users
+                    SELECT timestamp, n_users, queue_size, queue_enabled, pc_users,
+                           current_users AS legacy_current_users
                     FROM metrics
                     WHERE instance_id = %s
                       AND timestamp > NOW() - INTERVAL '%s hours'
@@ -229,4 +275,83 @@ class Database:
 
         except Exception as e:
             logger.error(f"Error getting instance metrics: {e}")
+            return []
+
+    # ------------------------------------------------------------------
+    # API エンドポイント向けクエリ
+    # ------------------------------------------------------------------
+
+    _METRICS_COLS = """
+        m.timestamp,
+        m.instance_id,
+        m.n_users,
+        m.queue_size,
+        m.queue_enabled,
+        m.pc_users,
+        COALESCE(m.current_users, 0) AS legacy_current_users,
+        i.capacity,
+        i.location,
+        i.name        AS instance_name,
+        i.display_name,
+        i.world_name,
+        i.world_thumbnail_url,
+        i.world_image_url,
+        i.instance_type,
+        i.region,
+        i.created_at,
+        i.is_active
+    """
+
+    def get_metrics_with_instances(self, days: int) -> tuple[list[dict], dict[int, dict]]:
+        """イベントグループ用：直近 N 日のメトリクス行と、全インスタンス辞書を返す。"""
+        if not self.ensure_connected():
+            return [], {}
+
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute(f"""
+                    SELECT {self._METRICS_COLS}
+                    FROM metrics m
+                    JOIN instances i ON m.instance_id = i.id
+                    WHERE m.timestamp > NOW() - MAKE_INTERVAL(days => %s::integer)
+                    ORDER BY m.timestamp DESC
+                """, (days,))
+                cols = [d[0] for d in cur.description]
+                metrics = [dict(zip(cols, row)) for row in cur.fetchall()]
+
+                cur.execute("SELECT * FROM instances")
+                cols = [d[0] for d in cur.description]
+                instances = {row[0]: dict(zip(cols, row)) for row in cur.fetchall()}
+
+            return metrics, instances
+
+        except Exception as e:
+            logger.error(f"Error fetching metrics with instances: {e}")
+            return [], {}
+
+    def get_metrics_list(self, instance_id: Optional[int], hours: int) -> list[dict]:
+        """メトリクス一覧（instances の capacity 付き）を返す。"""
+        if not self.ensure_connected():
+            return []
+
+        try:
+            with self.conn.cursor() as cur:
+                where = "m.timestamp > NOW() - MAKE_INTERVAL(hours => %s::integer)"
+                params: tuple = (hours,)
+                if instance_id is not None:
+                    where += " AND m.instance_id = %s"
+                    params = (hours, instance_id)
+
+                cur.execute(f"""
+                    SELECT {self._METRICS_COLS}
+                    FROM metrics m
+                    JOIN instances i ON m.instance_id = i.id
+                    WHERE {where}
+                    ORDER BY m.timestamp DESC
+                """, params)
+                cols = [d[0] for d in cur.description]
+                return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+        except Exception as e:
+            logger.error(f"Error fetching metrics list: {e}")
             return []
