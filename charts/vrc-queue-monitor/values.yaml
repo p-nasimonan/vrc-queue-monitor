@@ -37,6 +37,8 @@ frontend:
 ## API・コレクター両方が参照する ConfigMap に書き出される。
 ## 使わない変数は各プロセスが無視する。
 backend:
+  image:
+    tag: ""  # 未設定時は image.tag を使用（argocd-image-updater が更新）
   config:
     # API サーバー設定
     API_PORT: "8000"
