@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   AreaChart,
   Area,
@@ -112,12 +113,14 @@ function filterByRange(metrics: Metric[], rangeHours: number, offsetSteps: numbe
 export function QueueChart({ metrics, capacity, height = 180, timezone }: QueueChartProps) {
   const { rangeHours, offsetSteps } = useChartSettings();
   const tz = timezone ?? config.timezone;
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
   const data = filterByRange(metrics, rangeHours, offsetSteps, tz);
   const maxValue = Math.max(capacity > 0 ? capacity : 0, ...data.map((d) => d.users + d.queue), 1);
   const xInterval = Math.max(0, Math.floor(data.length / 8) - 1);
 
-  if (data.length === 0) {
+  if (!mounted || data.length === 0) {
     return (
       <div
         className={css({
@@ -129,7 +132,7 @@ export function QueueChart({ metrics, capacity, height = 180, timezone }: QueueC
         })}
         style={{ height }}
       >
-        データなし
+        {mounted ? "データなし" : null}
       </div>
     );
   }

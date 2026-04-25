@@ -125,8 +125,8 @@ export function ConfigPanel() {
                     <Item label="収集時間帯" value={formatTimeRange(config.start_time, config.duration_minutes)} />
                     <Item label="収集間隔" value={`${config.poll_interval_minutes} 分ごと`} />
                     <Item
-                        label={config.schedule_type === "always" ? "次回" : "次回収集開始"}
-                        value={config.schedule_type === "always" ? "常時収集中" : formatNextStart(config.next_start)}
+                        label="次回収集開始"
+                        value={formatNextStart(config.next_start)}
                         highlight={!config.is_active_now}
                     />
                 </div>
