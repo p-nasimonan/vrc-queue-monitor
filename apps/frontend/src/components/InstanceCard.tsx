@@ -10,6 +10,7 @@ import { getCapacityColor } from "@/styles/utils";
 interface InstanceCardProps {
   instance: InstanceWithMetrics;
   isLive?: boolean;
+  timeRangeMs?: [number, number];
 }
 
 /** display_name から インスタンスリーダーを抽出 */
@@ -24,7 +25,7 @@ function extractLeader(displayName: string | null | undefined): string | null {
   return null;
 }
 
-export function InstanceCard({ instance, isLive = false }: InstanceCardProps) {
+export function InstanceCard({ instance, isLive = false, timeRangeMs }: InstanceCardProps) {
   const latestMetric = instance.metrics[instance.metrics.length - 1];
   const currentUsers = latestMetric?.current_users ?? 0;
   const queueSize = latestMetric?.queue_size ?? 0;
@@ -217,7 +218,7 @@ export function InstanceCard({ instance, isLive = false }: InstanceCardProps) {
 
       {/* チャート */}
       <div className={css({ flex: 1, minW: 0, p: 2 })}>
-        <QueueChart metrics={instance.metrics} capacity={instance.capacity} height={150} />
+        <QueueChart metrics={instance.metrics} capacity={instance.capacity} height={150} timeRangeMs={timeRangeMs} />
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { css } from "../../styled-system/css";
 import type { EventGroup } from "@/lib/api";
 import { InstanceCard } from "./InstanceCard";
+import { parseUtcMs } from "./QueueChart";
 import { badgeRecipe } from "@/styles/recipes";
 
 interface EventSectionProps {
@@ -32,6 +33,15 @@ export function EventSection({ event, defaultOpen = false, isLive = false }: Eve
       minute: "2-digit",
       timeZone: "Asia/Tokyo",
     });
+
+  // 全インスタンスのタイムスタンプから共通時間範囲を計算
+  const allTs = event.instances.flatMap((inst) =>
+    inst.metrics.map((m) => parseUtcMs(m.timestamp))
+  );
+  const globalStartMs = allTs.length > 0 ? Math.min(...allTs) : Date.now();
+  const globalEndMs = allTs.length > 0 ? Math.max(...allTs) : Date.now();
+  const pad = Math.max((globalEndMs - globalStartMs) * 0.03, 5 * 60_000);
+  const timeRangeMs: [number, number] = [globalStartMs - pad, globalEndMs + pad];
 
   const totalUsers = event.instances.reduce((sum, inst) => {
     const latest = inst.metrics[inst.metrics.length - 1];
@@ -156,7 +166,7 @@ export function EventSection({ event, defaultOpen = false, isLive = false }: Eve
           })}
         >
           {event.instances.map((instance) => (
-            <InstanceCard key={instance.id} instance={instance} isLive={isLive} />
+            <InstanceCard key={instance.id} instance={instance} isLive={isLive} timeRangeMs={timeRangeMs} />
           ))}
         </div>
       )}
