@@ -5,11 +5,12 @@ import { useChartSettings } from "@/contexts/ChartSettings";
 
 const RANGES: { value: number; label: string }[] = [
   { value: 0, label: "全範囲" },
+  { value: 10 / 60, label: "10分" },
+  { value: 20 / 60, label: "20分" },
   { value: 0.5, label: "30分" },
   { value: 1, label: "1時間" },
-  { value: 1.5, label: "1時間半" },
+  { value: 2, label: "2時間" },
   { value: 3, label: "3時間" },
-  { value: 5, label: "5時間" },
 ];
 
 export function ChartControls() {

@@ -127,7 +127,7 @@ POLL_INTERVAL_MINUTES=5
 # インスタンスが開いていると判断したときの短いポーリング間隔（分）
 POLL_INTERVAL_OPEN_MINUTES=1
 # インスタンス一覧取得間隔（分）
-DISCOVERY_INTERVAL_MINUTES=30
+DISCOVERY_INTERVAL_MINUTES=5
 ```
 
 ## 🧪 開発ワークフロー
