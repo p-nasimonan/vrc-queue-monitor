@@ -26,8 +26,10 @@ def main() -> None:
         logger.error("VRC_GROUP_ID environment variable is required")
         sys.exit(1)
 
-    poll_interval = int(os.environ.get("POLL_INTERVAL_MINUTES", 2))
-    discovery_interval = int(os.environ.get("DISCOVERY_INTERVAL_MINUTES", 10))
+    poll_interval = int(os.environ.get("POLL_INTERVAL_MINUTES", 5))
+    # 短い間隔（インスタンスが開いていると判断したときに使用）
+    poll_interval_open = int(os.environ.get("POLL_INTERVAL_OPEN_MINUTES", 1))
+    discovery_interval = int(os.environ.get("DISCOVERY_INTERVAL_MINUTES", 30))
     schedule = ScheduleConfig()
 
     logger.info("=" * 50)
@@ -62,8 +64,33 @@ def main() -> None:
             sys.exit(1)
 
     poll_seconds = poll_interval * 60
+    poll_open_seconds = poll_interval_open * 60
     discovery_seconds = discovery_interval * 60
     last_discovery = last_metrics = 0.0
+
+    def _any_instance_open() -> bool:
+        """直近のメトリクスからインスタンスが開いているか判定する。
+
+        判定基準:
+          - 直近1時間の最新レコードで `n_users > 0` または `queue_enabled == True`
+        """
+        try:
+            active = db.get_active_instances()
+            if not active:
+                return False
+            for inst in active:
+                iid = inst.get("id")
+                if not iid:
+                    continue
+                metrics = db.get_instance_metrics(iid, hours=1)
+                if not metrics:
+                    continue
+                last = metrics[-1]
+                if (last.get("n_users", 0) or 0) > 0 or bool(last.get("queue_enabled")):
+                    return True
+            return False
+        except Exception:
+            return False
 
     try:
         while True:
@@ -72,7 +99,9 @@ def main() -> None:
                 if now - last_discovery >= discovery_seconds:
                     discover_instances(api, db, group_id)
                     last_discovery = now
-                if now - last_metrics >= poll_seconds:
+                # 動的にポーリング間隔を切り替える（インスタンスが開いている場合は短い間隔）
+                current_poll = poll_open_seconds if _any_instance_open() else poll_seconds
+                if now - last_metrics >= current_poll:
                     collect_metrics(api, db)
                     last_metrics = now
             time.sleep(5)
