@@ -46,7 +46,9 @@ backend:
     ## CORS_ORIGINS: "https://vrc-monitor.example.com"
     # コレクター設定
     POLL_INTERVAL_MINUTES: "5"
-    DISCOVERY_INTERVAL_MINUTES: "10"
+    DISCOVERY_INTERVAL_MINUTES: "30"
+    # インスタンスが開いていると判断したときの短いポーリング間隔（分）
+    POLL_INTERVAL_OPEN_MINUTES: "1"
     # スケジュール設定（両方で共有）
     SCHEDULE_TYPE: "always"   # always | weekday | day_of_month
     SCHEDULE_DAYS: ""         # 例: "sat,sun" または "5,15,25"

@@ -120,6 +120,14 @@ VRCHAT_GROUP_ID=grp_xxxxx
 API_PORT=8000
 CORS_ORIGINS=http://localhost:3000
 ENV=development
+ 
+# Collector / Polling
+# データ収集ポーリング間隔（分）
+POLL_INTERVAL_MINUTES=5
+# インスタンスが開いていると判断したときの短いポーリング間隔（分）
+POLL_INTERVAL_OPEN_MINUTES=1
+# インスタンス一覧取得間隔（分）
+DISCOVERY_INTERVAL_MINUTES=30
 ```
 
 ## 🧪 開発ワークフロー
