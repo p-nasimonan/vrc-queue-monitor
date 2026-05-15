@@ -48,6 +48,8 @@ ENV=production                       # 環境（production | development）
 LOG_LEVEL=INFO                       # ログレベル（DEBUG | INFO | WARNING | ERROR | CRITICAL）
 ```
 
+`LOG_LEVEL=DEBUG` にすると、インスタンス詳細の生データに近い JSON 形式のログを出せます。通常は集約した要約だけを INFO に出し、詳細確認時だけ DEBUG を使う運用を想定しています。
+
 ## 動作原理
 
 ### 二段階ポーリング戦略
@@ -65,6 +67,8 @@ VRChat APIの負荷を減らすため、データ収集を2つのフェーズに
 - **API**: `GET /instances/{worldId}:{instanceId}` - 各インスタンスの詳細を取得
 - **処理**: DBに保存されたアクティブなインスタンスのみ対象
 - **データ**: `queueSize`, `queueEnabled`, `n_users`（現在のキュー情報）
+
+VRChat SDK から取得した結果は Python の dict に正規化されるため、JSON とほぼ同じ形で扱えます。`to_dict()` の返却値をそのまま保存せず、必要なキーだけ `snake_case` に整えて DB に渡しています。
 
 #### メリット
 - グループAPI呼び出しを削減（10分に1回）

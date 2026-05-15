@@ -4,12 +4,62 @@ VRChat API からデータを取得して DB に保存する。
 計算・表示ロジックは持たず、API が返す生値をそのまま渡す。
 """
 
+import json
 import time
 import logging
 from vrc_api import VRChatAPI
 from db import Database
 
 logger = logging.getLogger(__name__)
+
+
+def _format_instance_summary(inst: dict) -> str:
+    world = inst.get("world") or {}
+    if isinstance(world, dict):
+        world_name = world.get("name") or "Unknown"
+    else:
+        world_name = getattr(world, "name", "Unknown")
+
+    return (
+        f"location={inst.get('location') or inst.get('instanceId') or 'unknown'} "
+        f"name={inst.get('name') or 'Unknown'} "
+        f"world={world_name} "
+        f"capacity={inst.get('capacity', 0) or 0} "
+        f"type={inst.get('type') or 'unknown'} "
+        f"region={inst.get('region') or inst.get('photonRegion') or 'unknown'} "
+        f"display_name={inst.get('display_name') or inst.get('displayName') or '-'}"
+    )
+
+
+def _log_instance_detail(location: str, detail: dict) -> None:
+    n_users: int = detail.get("n_users", 0) or 0
+    queue_size: int = detail.get("queue_size", 0) or 0
+    queue_enabled: bool = bool(detail.get("queue_enabled") or False)
+    capacity: int = detail.get("capacity", 0) or 0
+    pc_users: int = (detail.get("platforms") or {}).get("standalonewindows", 0) or 0
+    world = detail.get("world") or {}
+    world_name = world.get("name") if isinstance(world, dict) else getattr(world, "name", "Unknown")
+
+    logger.info(
+        "Instance %s: world=%s users=%s queue=%s enabled=%s pc=%s capacity=%s type=%s region=%s display_name=%s",
+        location,
+        world_name or "Unknown",
+        n_users,
+        queue_size,
+        queue_enabled,
+        pc_users,
+        capacity,
+        detail.get("type") or "unknown",
+        detail.get("region") or detail.get("photon_region") or "unknown",
+        detail.get("display_name") or detail.get("displayName") or "-",
+    )
+
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(
+            "Raw instance detail for %s:\n%s",
+            location,
+            json.dumps(detail, ensure_ascii=False, indent=2, default=str, sort_keys=True),
+        )
 
 
 def _extract_world_images(world: dict | object) -> tuple[str | None, str | None]:
@@ -37,6 +87,7 @@ def discover_instances(api: VRChatAPI, db: Database, group_id: str) -> None:
 
         active_locations = []
         for inst in group_instances:
+            logger.info(_format_instance_summary(inst))
             location = inst.get("location") or inst.get("instanceId")
             if not location:
                 continue
@@ -91,6 +142,8 @@ def collect_metrics(api: VRChatAPI, db: Database) -> None:
             detail = api.get_instance_detail(world_id, instance_id)
             if not detail:
                 continue
+
+            _log_instance_detail(location, detail)
 
             # --- 生値のみ取得（計算しない） ---
             n_users: int = detail.get("n_users", 0) or 0
