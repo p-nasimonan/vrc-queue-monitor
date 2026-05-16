@@ -1,0 +1,27 @@
+{
+  "name": "vrc-queue-monitor-backend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "dev:api": "tsx watch src/api.ts",
+    "start": "tsx src/main.ts",
+    "api": "tsx src/api.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.14.0",
+    "drizzle-orm": "^0.41.0",
+    "hono": "^4.7.0",
+    "postgres": "^3.4.0",
+    "tsx": "^4.19.0",
+    "vrchat": "^2.21.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "drizzle-kit": "^0.31.0",
+    "typescript": "^5.7.0"
+  },
+  "packageManager": "pnpm@10.30.0"
+}

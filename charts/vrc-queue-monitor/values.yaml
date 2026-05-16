@@ -62,7 +62,7 @@ backendApi:
   image:
     name: backend
     tag: ""
-  command: ["python", "api.py"]
+  command: ["node_modules/.bin/tsx", "src/api.ts"]
   resources:
     requests:
       cpu: 100m
@@ -80,7 +80,7 @@ backendCollector:
   image:
     name: backend
     tag: ""
-  command: ["python", "main.py"]
+  command: ["node_modules/.bin/tsx", "src/main.ts"]
   resources:
     requests:
       cpu: 100m

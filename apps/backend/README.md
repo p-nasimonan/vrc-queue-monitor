@@ -37,6 +37,7 @@ SCHEDULE_START_TIME=22:00            # 開始時刻（HH:MM）
 SCHEDULE_DURATION_MINUTES=150        # 監視継続時間（分）例: 150 = 2時間30分
 POLL_INTERVAL_MINUTES=5              # メトリクス収集間隔（分）- 通常時
 DISCOVERY_INTERVAL_MINUTES=10        # インスタンス発見間隔（分）- 低頻度
+INSTANCE_DETAIL_REQUEST_INTERVAL_SECONDS=0.5  # インスタンス詳細の連続取得間隔（秒）
 ```
 
 ### API設定
@@ -69,6 +70,7 @@ VRChat APIの負荷を減らすため、データ収集を2つのフェーズに
 - **データ**: `queueSize`, `queueEnabled`, `n_users`（現在のキュー情報）
 
 VRChat SDK から取得した結果は Python の dict に正規化されるため、JSON とほぼ同じ形で扱えます。`to_dict()` の返却値をそのまま保存せず、必要なキーだけ `snake_case` に整えて DB に渡しています。
+詳細取得は複数インスタンスを順番に叩くため、間隔を短くするとログの時点差が減って待機列の見え方が安定します。
 
 #### メリット
 - グループAPI呼び出しを削減（10分に1回）

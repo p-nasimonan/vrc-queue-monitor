@@ -8,12 +8,16 @@ on:
       - 'v*.*.*'
     paths:
       - "apps/backend/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
       - ".github/workflows/docker-backend.yml"
   pull_request:
     branches:
       - main
     paths:
       - "apps/backend/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
   workflow_dispatch:
 
 env:
@@ -61,7 +65,7 @@ jobs:
       - name: Build and push Backend
         uses: docker/build-push-action@v6
         with:
-          context: ./apps/backend
+          context: .
           file: ./apps/backend/Dockerfile
           target: production
           push: ${{ github.event_name != 'pull_request' }}
